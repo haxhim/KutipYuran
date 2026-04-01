@@ -1,6 +1,7 @@
 import { BillingRecordStatus, ReminderCampaignStatus, ReminderRecipientStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { enqueueCampaignRecipients, enqueueCampaignStart } from "@/queues";
+import { assertCanSendMessages } from "@/modules/saas/saas.service";
 
 async function getOrCreateDefaultTemplate(organizationId: string) {
   const existing = await db.messageTemplate.findFirst({
@@ -125,6 +126,8 @@ export async function startCampaign(organizationId: string, campaignId: string) 
   if (!campaign.recipients.length) {
     throw new Error("This campaign has no queued recipients left to send");
   }
+
+  await assertCanSendMessages(organizationId, campaign.recipients.length);
 
   await db.reminderCampaign.update({
     where: { id: campaignId },

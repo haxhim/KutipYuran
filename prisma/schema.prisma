@@ -26,6 +26,11 @@ enum SubscriptionStatus {
   EXPIRED
 }
 
+enum SaaSBillingInterval {
+  MONTHLY
+  YEARLY
+}
+
 enum BillingType {
   ONE_TIME
   RECURRING_MONTHLY
@@ -63,6 +68,14 @@ enum PaymentTransactionStatus {
   FAILED
   CANCELLED
   REFUNDED
+}
+
+enum SaaSCheckoutStatus {
+  PENDING
+  PAID
+  FAILED
+  CANCELLED
+  EXPIRED
 }
 
 enum ReminderCampaignStatus {
@@ -272,9 +285,15 @@ model SaaSPlan {
   key                    String                    @unique
   name                   String
   priceMonthly           Decimal                   @db.Decimal(12, 2)
+  priceAmount            Decimal                   @default(0) @db.Decimal(12, 2)
+  billingInterval        SaaSBillingInterval      @default(MONTHLY)
+  durationDays           Int                       @default(30)
   maxCustomers           Int
+  maxImportedCustomers   Int                       @default(500)
   maxMonthlyCampaigns    Int
+  maxMessagesPerPeriod   Int                       @default(1000)
   maxActiveWhatsapp      Int
+  maxWhatsappSessions    Int                       @default(1)
   maxPaymentRecordsMonth Int
   teamMembers            Int
   analyticsLevel         String
@@ -283,9 +302,11 @@ model SaaSPlan {
   toyyibpayEnabled       Boolean                   @default(false)
   customBrandingEnabled  Boolean                   @default(false)
   prioritySupport        Boolean                   @default(false)
+  isActive               Boolean                   @default(true)
   createdAt              DateTime                  @default(now())
   updatedAt              DateTime                  @updatedAt
   subscriptions          OrganizationSubscription[]
+  checkouts              SaaSSubscriptionCheckout[]
 }
 
 model OrganizationSubscription {
@@ -293,6 +314,7 @@ model OrganizationSubscription {
   organizationId     String
   saasPlanId         String
   status             SubscriptionStatus @default(TRIALING)
+  billingInterval    SaaSBillingInterval @default(MONTHLY)
   startsAt           DateTime
   endsAt             DateTime?
   autoRenew          Boolean            @default(true)
@@ -305,6 +327,25 @@ model OrganizationSubscription {
   saasPlan           SaaSPlan           @relation(fields: [saasPlanId], references: [id], onDelete: Restrict)
 
   @@index([organizationId, status])
+}
+
+model SaaSSubscriptionCheckout {
+  id                String             @id @default(cuid())
+  saasPlanId        String
+  provider          PaymentProvider
+  status            SaaSCheckoutStatus @default(PENDING)
+  billingInterval   SaaSBillingInterval
+  amount            Decimal            @db.Decimal(12, 2)
+  currency          String             @default("MYR")
+  providerReference String?            @unique
+  checkoutUrl       String?
+  registrationData  Json
+  paidAt            DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  saasPlan          SaaSPlan           @relation(fields: [saasPlanId], references: [id], onDelete: Restrict)
+
+  @@index([status, createdAt])
 }
 
 model CustomerTag {

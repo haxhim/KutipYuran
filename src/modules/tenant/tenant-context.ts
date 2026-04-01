@@ -1,7 +1,8 @@
 import { db } from "@/lib/db";
 import { hasPermission } from "@/lib/rbac";
 import { getCurrentUser } from "@/lib/auth";
-import type { PermissionKey } from "@/modules/authz/permissions";
+import { permissions, type PermissionKey } from "@/modules/authz/permissions";
+import { assertActiveSubscriptionAccess } from "@/modules/saas/saas.service";
 
 export async function requireTenantContext(slug?: string) {
   const user = await getCurrentUser();
@@ -42,6 +43,10 @@ export async function requireTenantPermission(permission: PermissionKey, slug?: 
 
   if (tenant.user.isPlatformAdmin) {
     return tenant;
+  }
+
+  if (permission !== permissions.managePricingAndLimits) {
+    await assertActiveSubscriptionAccess(tenant.organizationId);
   }
 
   if (!tenant.role || !hasPermission(tenant.role, permission)) {

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { permissions } from "@/modules/authz/permissions";
+import { createImportPreviewJob, enqueueImportJob, previewCsvImport } from "@/modules/imports/import.service";
+import { assertCanImportCustomers } from "@/modules/saas/saas.service";
 import { requireTenantPermission } from "@/modules/tenant/tenant-context";
-import { createImportPreviewJob, enqueueImportJob } from "@/modules/imports/import.service";
 
 export async function POST(request: NextRequest) {
   const tenant = await requireTenantPermission(permissions.manageCustomers);
@@ -17,6 +18,9 @@ export async function POST(request: NextRequest) {
       });
       return NextResponse.json({ ok: true, importJobId: job.id, status: job.status });
     }
+
+    const rawPreview = await previewCsvImport(tenant.organizationId, String(body.csvContent || ""));
+    await assertCanImportCustomers(tenant.organizationId, rawPreview.previewRows.length);
 
     const preview = await createImportPreviewJob({
       organizationId: tenant.organizationId,

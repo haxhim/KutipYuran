@@ -1,13 +1,14 @@
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
-import { permissions } from "@/modules/authz/permissions";
+import { getOrganizationUsageSnapshot } from "@/modules/saas/saas.service";
 import { getOrganizationSettings } from "@/modules/settings/settings.service";
-import { requireTenantPermission } from "@/modules/tenant/tenant-context";
+import { requireTenantContext } from "@/modules/tenant/tenant-context";
 import { PayoutConsole } from "@/app/app/subscription/payout-console";
 
 export default async function SubscriptionPage() {
-  const tenant = await requireTenantPermission(permissions.managePricingAndLimits);
+  const tenant = await requireTenantContext();
   const organization = await getOrganizationSettings(tenant.organizationId);
+  const usage = await getOrganizationUsageSnapshot(tenant.organizationId);
   const currentSubscription = organization.subscriptions[0] || null;
 
   return (
@@ -27,6 +28,10 @@ export default async function SubscriptionPage() {
             <p>Auto renew: {currentSubscription?.autoRenew ? "Enabled" : "Disabled"}</p>
             <p>Starts: {currentSubscription?.startsAt ? new Date(currentSubscription.startsAt).toLocaleDateString() : "-"}</p>
             <p>Ends: {currentSubscription?.endsAt ? new Date(currentSubscription.endsAt).toLocaleDateString() : "-"}</p>
+            <p>WhatsApp session limit: {usage.subscription?.saasPlan.maxWhatsappSessions || 0}</p>
+            <p>Customer database limit: {usage.subscription?.saasPlan.maxImportedCustomers || 0}</p>
+            <p>Message limit: {usage.subscription?.saasPlan.maxMessagesPerPeriod || 0}</p>
+            <p>Messages used: {usage.usage.messagesSent}</p>
           </div>
         </Card>
 

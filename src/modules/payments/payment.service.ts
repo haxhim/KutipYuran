@@ -2,6 +2,7 @@ import { PaymentProvider, PaymentTransactionStatus, Prisma, WebhookStatus } from
 import { db } from "@/lib/db";
 import { ensureGatewayAvailableForOrganization } from "@/modules/integrations/integration.service";
 import { getPaymentProvider } from "@/modules/payments/payment.factory";
+import { completeRegistrationCheckout } from "@/modules/saas/saas.service";
 import { markGatewayPaymentPaid, recordGatewayPaymentPending } from "@/modules/wallet/wallet.service";
 import type { WebhookProcessResult } from "@/types";
 
@@ -129,6 +130,30 @@ export async function processGatewayWebhook(args: {
       });
 
   if (!transaction) {
+    if (providerReference && result.status === "paid") {
+      const checkout = await completeRegistrationCheckout({
+        provider: args.provider,
+        providerReference,
+      });
+
+      if (checkout) {
+        await db.webhookEvent.update({
+          where: { id: webhookEvent.id },
+          data: {
+            status: WebhookStatus.PROCESSED,
+            processedAt: new Date(),
+          },
+        });
+
+        return {
+          ok: true,
+          duplicate: false,
+          webhookEventId: webhookEvent.id,
+          transactionId: null,
+        };
+      }
+    }
+
     await db.webhookEvent.update({
       where: { id: webhookEvent.id },
       data: {

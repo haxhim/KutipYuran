@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { permissions } from "@/modules/authz/permissions";
+import { assertCanCreateWhatsappSession } from "@/modules/saas/saas.service";
 import { requireTenantPermission } from "@/modules/tenant/tenant-context";
 import { createWhatsappSession } from "@/modules/whatsapp/whatsapp.service";
 
@@ -8,6 +9,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const label = String(body.label || "Primary WhatsApp");
 
+  await assertCanCreateWhatsappSession(tenant.organizationId);
   const session = await createWhatsappSession(tenant.organizationId, label);
   return NextResponse.json(session);
 }

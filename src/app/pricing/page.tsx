@@ -1,22 +1,25 @@
 import { SiteHeader } from "@/components/layout/site-header";
 import { Card, CardTitle } from "@/components/ui/card";
+import { listPublicPricingPlans } from "@/modules/saas/saas.service";
 
-export default function PricingPage() {
+export default async function PricingPage() {
+  const plans = await listPublicPricingPlans();
+
   return (
     <div>
       <SiteHeader />
       <main className="mx-auto max-w-6xl px-6 py-16">
         <h1 className="text-4xl font-bold">Pricing</h1>
         <div className="mt-8 grid gap-6 md:grid-cols-3">
-          {[
-            ["Starter", "RM79/month", "1 WhatsApp session, up to 500 customers"],
-            ["Pro", "RM199/month", "3 team members, gateway support, analytics"],
-            ["Business", "RM399/month", "Priority support, advanced reporting, more limits"],
-          ].map(([name, price, desc]) => (
-            <Card key={name}>
-              <CardTitle>{name}</CardTitle>
-              <p className="mt-3 text-3xl font-bold">{price}</p>
-              <p className="mt-2 text-sm text-muted-foreground">{desc}</p>
+          {plans.map((plan) => (
+            <Card key={plan.id}>
+              <CardTitle>{plan.name}</CardTitle>
+              <p className="mt-3 text-3xl font-bold">
+                RM{Number(plan.priceAmount || plan.priceMonthly).toFixed(2)}/{plan.billingInterval === "YEARLY" ? "year" : "month"}
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {plan.maxWhatsappSessions} WhatsApp session, {plan.maxImportedCustomers} customers, {plan.maxMessagesPerPeriod} outbound messages.
+              </p>
             </Card>
           ))}
         </div>
@@ -24,4 +27,3 @@ export default function PricingPage() {
     </div>
   );
 }
-

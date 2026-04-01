@@ -1,9 +1,9 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { createSession, getCurrentUser } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
 import { getSignedInHome } from "@/lib/auth-redirects";
-import { registerOrganizationOwner } from "@/modules/auth/auth.service";
+import { createRegistrationCheckout } from "@/modules/saas/saas.service";
 
 export async function registerAction(formData: FormData) {
   const existingUser = await getCurrentUser();
@@ -11,14 +11,14 @@ export async function registerAction(formData: FormData) {
     redirect(getSignedInHome(existingUser));
   }
 
-  const user = await registerOrganizationOwner({
+  const checkout = await createRegistrationCheckout({
     organizationName: String(formData.get("organizationName") || ""),
     contactPerson: String(formData.get("contactPerson") || ""),
     fullName: String(formData.get("fullName") || ""),
     email: String(formData.get("email") || ""),
     password: String(formData.get("password") || ""),
+    planId: String(formData.get("planId") || ""),
   });
 
-  await createSession(user.id);
-  redirect("/app");
+  redirect((checkout.checkoutUrl || `/pay/return?kind=saas-signup&checkout=${checkout.id}&status=pending`) as never);
 }

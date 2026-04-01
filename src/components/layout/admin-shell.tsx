@@ -3,6 +3,8 @@ import { AuthenticatedShell } from "@/components/layout/authenticated-shell";
 
 const adminNav: Array<{ label: string; href: string }> = [
   { label: "Overview", href: "/admin" },
+  { label: "Pricing Plans", href: "/admin/pricing" },
+  { label: "User Database", href: "/admin/users" },
   { label: "Gateway Config", href: "/admin/gateways" },
   { label: "Queues", href: "/admin/queues" },
   { label: "Webhooks", href: "/admin/webhooks" },
