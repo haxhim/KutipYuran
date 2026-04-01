@@ -1,0 +1,15 @@
+services:
+  - name: kutipyuran-app
+    dockerfile: Dockerfile
+    httpPort: 3000
+    envFile: .env
+    volumes:
+      - ./storage:/app/storage
+      - ./uploads:/app/uploads
+  - name: kutipyuran-worker
+    dockerfile: Dockerfile.worker
+    envFile: .env
+    volumes:
+      - ./storage:/app/storage
+      - ./uploads:/app/uploads
+

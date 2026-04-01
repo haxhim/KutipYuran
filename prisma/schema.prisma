@@ -1,0 +1,776 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  INVITED
+  SUSPENDED
+}
+
+enum MemberRole {
+  ADMIN
+  USER
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+}
+
+enum BillingType {
+  ONE_TIME
+  RECURRING_MONTHLY
+  RECURRING_CUSTOM
+}
+
+enum BillingRecordStatus {
+  DRAFT
+  PENDING
+  SENT
+  PAID
+  UNPAID
+  OVERDUE
+  FAILED
+  CANCELLED
+  PARTIAL
+}
+
+enum PaymentMode {
+  MANUAL
+  GATEWAY
+  HYBRID
+}
+
+enum PaymentProvider {
+  CHIP
+  TOYYIBPAY
+  MANUAL
+}
+
+enum PaymentTransactionStatus {
+  INITIATED
+  PENDING
+  PAID
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+enum ReminderCampaignStatus {
+  DRAFT
+  SCHEDULED
+  RUNNING
+  PAUSED
+  COMPLETED
+  CANCELLED
+  FAILED
+}
+
+enum ReminderRecipientStatus {
+  QUEUED
+  PROCESSING
+  SENT
+  DELIVERED
+  FAILED
+  SKIPPED
+  CANCELLED
+}
+
+enum ImportJobStatus {
+  DRAFT
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum WhatsAppSessionStatus {
+  PENDING_QR
+  CONNECTED
+  DISCONNECTED
+  RECONNECTING
+  LOGGED_OUT
+  FAILED
+}
+
+enum MessageDirection {
+  OUTBOUND
+  INBOUND
+}
+
+enum WalletLedgerType {
+  PAYMENT_PENDING
+  PAYMENT_RECEIVED
+  PAYOUT_REQUESTED
+  PAYOUT_APPROVED
+  PAYOUT_REJECTED
+  PAYOUT_COMPLETED
+  MANUAL_ADJUSTMENT
+  REFUND
+}
+
+enum LedgerStatus {
+  PENDING
+  POSTED
+  REVERSED
+}
+
+enum PayoutStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PROCESSING
+  COMPLETED
+}
+
+enum WebhookStatus {
+  RECEIVED
+  VERIFIED
+  PROCESSED
+  FAILED
+  DUPLICATE
+}
+
+enum AuditActorType {
+  USER
+  SYSTEM
+  WEBHOOK
+}
+
+enum FeatureFlagScope {
+  GLOBAL
+  ORGANIZATION
+}
+
+model User {
+  id              String               @id @default(cuid())
+  email           String               @unique
+  passwordHash    String
+  fullName        String
+  phoneNumber     String?
+  status          UserStatus           @default(ACTIVE)
+  emailVerifiedAt DateTime?
+  isPlatformAdmin Boolean              @default(false)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  deletedAt       DateTime?
+  sessions        Session[]
+  memberships     OrganizationMember[]
+  auditLogs       AuditLog[]
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  token        String   @unique
+  ipAddress    String?
+  userAgent    String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  revokedAt    DateTime?
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Organization {
+  id                    String                    @id @default(cuid())
+  slug                  String                    @unique
+  name                  String
+  contactPerson         String
+  supportPhone          String?
+  supportWhatsapp       String?
+  senderDisplayName     String
+  messageSignature      String?
+  paymentMode           PaymentMode               @default(HYBRID)
+  locale                String                    @default("ms-MY")
+  timezone              String                    @default("Asia/Kuala_Lumpur")
+  currency              String                    @default("MYR")
+  suspendedAt           DateTime?
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+  deletedAt             DateTime?
+  members               OrganizationMember[]
+  subscriptions         OrganizationSubscription[]
+  customerTags          CustomerTag[]
+  customers             Customer[]
+  feePlans              FeePlan[]
+  customerPlanLinks     CustomerPlanAssignment[]
+  billingRecords        BillingRecord[]
+  billingItems          BillingItem[]
+  messageTemplates      MessageTemplate[]
+  messageLogs           MessageLog[]
+  reminderCampaigns     ReminderCampaign[]
+  reminderRecipients    ReminderCampaignRecipient[]
+  importJobs            ImportJob[]
+  importRowErrors       ImportRowError[]
+  paymentTransactions   PaymentTransaction[]
+  paymentProviderConfig PaymentProviderConfig[]
+  whatsappSessions      WhatsAppSession[]
+  whatsappLogs          WhatsAppConnectionLog[]
+  webhookEvents         WebhookEvent[]
+  auditLogs             AuditLog[]
+  wallet                OrganizationWallet?
+  walletEntries         WalletLedgerEntry[]
+  payoutRequests        PayoutRequest[]
+}
+
+model OrganizationMember {
+  id             String      @id @default(cuid())
+  organizationId String
+  userId         String
+  role           MemberRole
+  permissions    Json?
+  invitedAt      DateTime?
+  joinedAt       DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+}
+
+model Role {
+  id          String           @id @default(cuid())
+  key         String           @unique
+  label       String
+  description String?
+  permissions RolePermission[]
+}
+
+model Permission {
+  id          String           @id @default(cuid())
+  key         String           @unique
+  label       String
+  description String?
+  roles       RolePermission[]
+}
+
+model RolePermission {
+  id           String     @id @default(cuid())
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+}
+
+model SaaSPlan {
+  id                     String                    @id @default(cuid())
+  key                    String                    @unique
+  name                   String
+  priceMonthly           Decimal                   @db.Decimal(12, 2)
+  maxCustomers           Int
+  maxMonthlyCampaigns    Int
+  maxActiveWhatsapp      Int
+  maxPaymentRecordsMonth Int
+  teamMembers            Int
+  analyticsLevel         String
+  manualPaymentEnabled   Boolean                   @default(true)
+  chipEnabled            Boolean                   @default(false)
+  toyyibpayEnabled       Boolean                   @default(false)
+  customBrandingEnabled  Boolean                   @default(false)
+  prioritySupport        Boolean                   @default(false)
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
+  subscriptions          OrganizationSubscription[]
+}
+
+model OrganizationSubscription {
+  id                 String             @id @default(cuid())
+  organizationId     String
+  saasPlanId         String
+  status             SubscriptionStatus @default(TRIALING)
+  startsAt           DateTime
+  endsAt             DateTime?
+  autoRenew          Boolean            @default(true)
+  providerReference  String?
+  amount             Decimal            @db.Decimal(12, 2)
+  currency           String             @default("MYR")
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  saasPlan           SaaSPlan           @relation(fields: [saasPlanId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, status])
+}
+
+model CustomerTag {
+  id             String      @id @default(cuid())
+  organizationId String
+  name           String
+  type           String
+  color          String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customers      Customer[]   @relation("CustomerTags")
+
+  @@unique([organizationId, type, name])
+}
+
+model Customer {
+  id                 String                  @id @default(cuid())
+  organizationId     String
+  fullName           String
+  firstName          String?
+  email              String?
+  phoneNumber        String
+  normalizedWhatsapp String
+  externalRef        String?
+  notes              String?
+  isActive           Boolean                 @default(true)
+  metadata           Json?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  deletedAt          DateTime?
+  organization       Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tags               CustomerTag[]           @relation("CustomerTags")
+  planAssignments    CustomerPlanAssignment[]
+  billingRecords     BillingRecord[]
+  reminderRecipients ReminderCampaignRecipient[]
+  messageLogs        MessageLog[]
+  proofs             ManualPaymentProof[]
+
+  @@unique([organizationId, normalizedWhatsapp])
+  @@index([organizationId, fullName])
+}
+
+model FeePlan {
+  id                  String                  @id @default(cuid())
+  organizationId      String
+  name                String
+  description         String?
+  amount              Decimal                 @db.Decimal(12, 2)
+  currency            String                  @default("MYR")
+  billingType         BillingType
+  dueDayOfMonth       Int?
+  dueIntervalDays     Int?
+  active              Boolean                 @default(true)
+  lateFeeEnabled      Boolean                 @default(false)
+  lateFeeAmount       Decimal?                @db.Decimal(12, 2)
+  notes               String?
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+  deletedAt           DateTime?
+  organization        Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignments         CustomerPlanAssignment[]
+  billingItems        BillingItem[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, active])
+}
+
+model CustomerPlanAssignment {
+  id             String      @id @default(cuid())
+  organizationId String
+  customerId     String
+  feePlanId      String
+  quantity       Int         @default(1)
+  startDate      DateTime?
+  endDate        DateTime?
+  active         Boolean     @default(true)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer       Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  feePlan        FeePlan      @relation(fields: [feePlanId], references: [id], onDelete: Restrict)
+
+  @@unique([customerId, feePlanId])
+  @@index([organizationId, active])
+}
+
+model BillingRecord {
+  id                    String                   @id @default(cuid())
+  organizationId        String
+  customerId            String
+  referenceNo           String                   @unique
+  status                BillingRecordStatus      @default(DRAFT)
+  dueDate               DateTime
+  subtotalAmount        Decimal                  @db.Decimal(12, 2)
+  totalAmount           Decimal                  @db.Decimal(12, 2)
+  amountPaid            Decimal                  @db.Decimal(12, 2) @default(0)
+  currency              String                   @default("MYR")
+  paymentMode           PaymentMode
+  preferredProvider     PaymentProvider?
+  paymentLinkUrl        String?
+  gatewayCheckoutUrl    String?
+  paymentInstructionUrl String?
+  lastReminderSentAt    DateTime?
+  paidAt                DateTime?
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+  cancelledAt           DateTime?
+  organization          Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer              Customer                 @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  items                 BillingItem[]
+  transactions          PaymentTransaction[]
+  recipients            ReminderCampaignRecipient[]
+  proofs                ManualPaymentProof[]
+
+  @@index([organizationId, status, dueDate])
+  @@index([customerId, dueDate])
+}
+
+model BillingItem {
+  id              String       @id @default(cuid())
+  organizationId  String
+  billingRecordId String
+  feePlanId       String?
+  title           String
+  quantity        Int          @default(1)
+  unitAmount      Decimal      @db.Decimal(12, 2)
+  totalAmount     Decimal      @db.Decimal(12, 2)
+  notes           String?
+  createdAt       DateTime     @default(now())
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  billingRecord   BillingRecord @relation(fields: [billingRecordId], references: [id], onDelete: Cascade)
+  feePlan         FeePlan?      @relation(fields: [feePlanId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, billingRecordId])
+}
+
+model PaymentProviderConfig {
+  id                 String          @id @default(cuid())
+  organizationId     String?
+  provider           PaymentProvider
+  isGlobal           Boolean         @default(false)
+  isEnabled          Boolean         @default(false)
+  encryptedConfig    String
+  webhookSecretHash  String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  organization       Organization?   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, provider])
+  @@index([provider, isEnabled])
+}
+
+model PaymentTransaction {
+  id                    String                    @id @default(cuid())
+  organizationId        String
+  billingRecordId       String
+  provider              PaymentProvider
+  status                PaymentTransactionStatus  @default(INITIATED)
+  amount                Decimal                   @db.Decimal(12, 2)
+  currency              String                    @default("MYR")
+  providerReference     String?
+  providerPaymentId     String?
+  checkoutUrl           String?
+  rawRequest            Json?
+  rawResponse           Json?
+  paidAt                DateTime?
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+  organization          Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  billingRecord         BillingRecord             @relation(fields: [billingRecordId], references: [id], onDelete: Cascade)
+  ledgerEntries         WalletLedgerEntry[]
+  manualPaymentProofs   ManualPaymentProof[]
+
+  @@index([organizationId, provider, status])
+  @@index([providerReference])
+}
+
+model ManualPaymentProof {
+  id                   String              @id @default(cuid())
+  organizationId       String
+  customerId           String
+  billingRecordId      String
+  paymentTransactionId String?
+  filePath             String
+  originalFileName     String
+  mimeType             String
+  fileSize             Int
+  uploadedAt           DateTime            @default(now())
+  verifiedAt           DateTime?
+  verifiedByUserId     String?
+  note                 String?
+  organization         Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer             Customer            @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  billingRecord        BillingRecord       @relation(fields: [billingRecordId], references: [id], onDelete: Cascade)
+  paymentTransaction   PaymentTransaction? @relation(fields: [paymentTransactionId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, uploadedAt])
+}
+
+model MessageTemplate {
+  id             String      @id @default(cuid())
+  organizationId String
+  name           String
+  subject        String?
+  body           String
+  language       String      @default("ms")
+  isDefault      Boolean     @default(false)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  campaigns      ReminderCampaign[]
+
+  @@unique([organizationId, name])
+}
+
+model MessageLog {
+  id                    String           @id @default(cuid())
+  organizationId        String
+  customerId            String?
+  reminderCampaignId    String?
+  recipientId           String?
+  whatsappSessionId     String?
+  direction             MessageDirection
+  phoneNumber           String
+  messageBody           String
+  providerMessageId     String?
+  status                String
+  errorMessage          String?
+  sentAt                DateTime?
+  deliveredAt           DateTime?
+  createdAt             DateTime         @default(now())
+  organization          Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer              Customer?        @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  reminderCampaign      ReminderCampaign? @relation(fields: [reminderCampaignId], references: [id], onDelete: SetNull)
+  recipient             ReminderCampaignRecipient? @relation(fields: [recipientId], references: [id], onDelete: SetNull)
+  whatsappSession       WhatsAppSession? @relation(fields: [whatsappSessionId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+}
+
+model WhatsAppSession {
+  id                 String                 @id @default(cuid())
+  organizationId     String
+  label              String
+  phoneNumber        String?
+  status             WhatsAppSessionStatus  @default(PENDING_QR)
+  sessionKey         String                 @unique
+  qrCodeDataUrl      String?
+  lastActiveAt       DateTime?
+  disconnectedAt     DateTime?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  organization       Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  connectionLogs     WhatsAppConnectionLog[]
+  messageLogs        MessageLog[]
+
+  @@index([organizationId, status])
+}
+
+model WhatsAppConnectionLog {
+  id                 String            @id @default(cuid())
+  organizationId     String
+  whatsappSessionId  String
+  eventType          String
+  message            String?
+  payload            Json?
+  createdAt          DateTime          @default(now())
+  organization       Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  whatsappSession    WhatsAppSession   @relation(fields: [whatsappSessionId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+}
+
+model ReminderCampaign {
+  id                   String                    @id @default(cuid())
+  organizationId       String
+  name                 String
+  status               ReminderCampaignStatus    @default(DRAFT)
+  messageTemplateId    String?
+  scheduledAt          DateTime?
+  startedAt            DateTime?
+  completedAt          DateTime?
+  senderNameOverride   String?
+  batchSize            Int                       @default(20)
+  delayMinMs           Int                       @default(4000)
+  delayMaxMs           Int                       @default(10000)
+  maxPerHour           Int                       @default(200)
+  maxPerDay            Int                       @default(800)
+  totalRecipients      Int                       @default(0)
+  sentCount            Int                       @default(0)
+  failedCount          Int                       @default(0)
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
+  organization         Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  messageTemplate      MessageTemplate?          @relation(fields: [messageTemplateId], references: [id], onDelete: SetNull)
+  recipients           ReminderCampaignRecipient[]
+  messageLogs          MessageLog[]
+
+  @@index([organizationId, status, scheduledAt])
+}
+
+model ReminderCampaignRecipient {
+  id                    String                  @id @default(cuid())
+  organizationId        String
+  reminderCampaignId    String
+  customerId            String
+  billingRecordId       String?
+  status                ReminderRecipientStatus @default(QUEUED)
+  scheduledFor          DateTime?
+  sentAt                DateTime?
+  attemptCount          Int                     @default(0)
+  lastError             String?
+  dedupeKey             String
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  organization          Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  reminderCampaign      ReminderCampaign        @relation(fields: [reminderCampaignId], references: [id], onDelete: Cascade)
+  customer              Customer                @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  billingRecord         BillingRecord?          @relation(fields: [billingRecordId], references: [id], onDelete: SetNull)
+  messageLogs           MessageLog[]
+
+  @@unique([organizationId, dedupeKey])
+  @@index([organizationId, status, scheduledFor])
+}
+
+model ImportJob {
+  id                 String           @id @default(cuid())
+  organizationId     String
+  filePath           String
+  originalFileName   String
+  status             ImportJobStatus  @default(DRAFT)
+  totalRows          Int              @default(0)
+  successRows        Int              @default(0)
+  failedRows         Int              @default(0)
+  previewData        Json?
+  createdByUserId    String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  organization       Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  rowErrors          ImportRowError[]
+
+  @@index([organizationId, status, createdAt])
+}
+
+model ImportRowError {
+  id             String      @id @default(cuid())
+  organizationId String
+  importJobId    String
+  rowNumber      Int
+  rawRow         Json?
+  message        String
+  createdAt      DateTime    @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  importJob      ImportJob    @relation(fields: [importJobId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, importJobId])
+}
+
+model OrganizationWallet {
+  id               String      @id @default(cuid())
+  organizationId   String      @unique
+  availableBalance Decimal     @db.Decimal(14, 2) @default(0)
+  pendingBalance   Decimal     @db.Decimal(14, 2) @default(0)
+  totalEarned      Decimal     @db.Decimal(14, 2) @default(0)
+  totalWithdrawn   Decimal     @db.Decimal(14, 2) @default(0)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model WalletLedgerEntry {
+  id                    String            @id @default(cuid())
+  organizationId        String
+  paymentTransactionId  String?
+  payoutRequestId       String?
+  type                  WalletLedgerType
+  status                LedgerStatus      @default(POSTED)
+  amount                Decimal           @db.Decimal(14, 2)
+  currency              String            @default("MYR")
+  balanceDeltaAvailable Decimal           @db.Decimal(14, 2) @default(0)
+  balanceDeltaPending   Decimal           @db.Decimal(14, 2) @default(0)
+  referenceId           String?
+  externalProvider      PaymentProvider?
+  note                  String?
+  metadata              Json?
+  createdAt             DateTime          @default(now())
+  organization          Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  paymentTransaction    PaymentTransaction? @relation(fields: [paymentTransactionId], references: [id], onDelete: SetNull)
+  payoutRequest         PayoutRequest?    @relation(fields: [payoutRequestId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([referenceId])
+}
+
+model PayoutRequest {
+  id              String       @id @default(cuid())
+  organizationId  String
+  amount          Decimal      @db.Decimal(14, 2)
+  bankName        String
+  accountName     String
+  accountNumber   String
+  status          PayoutStatus @default(PENDING)
+  adminNote       String?
+  requestedAt     DateTime     @default(now())
+  processedAt     DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ledgerEntries   WalletLedgerEntry[]
+
+  @@index([organizationId, status, requestedAt])
+}
+
+model WebhookEvent {
+  id                 String         @id @default(cuid())
+  organizationId     String?
+  provider           PaymentProvider
+  externalEventId    String?
+  eventType          String
+  requestHeaders     Json?
+  payload            Json
+  signatureValid     Boolean        @default(false)
+  status             WebhookStatus  @default(RECEIVED)
+  processingError    String?
+  processedAt        DateTime?
+  createdAt          DateTime       @default(now())
+  organization       Organization?  @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  @@unique([provider, externalEventId])
+  @@index([status, createdAt])
+}
+
+model AuditLog {
+  id              String         @id @default(cuid())
+  organizationId  String?
+  userId          String?
+  actorType       AuditActorType
+  action          String
+  entityType      String
+  entityId        String?
+  metadata        Json?
+  createdAt       DateTime       @default(now())
+  organization    Organization?  @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  user            User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, action, createdAt])
+}
+
+model FeatureFlag {
+  id              String            @id @default(cuid())
+  key             String
+  scope           FeatureFlagScope  @default(GLOBAL)
+  organizationId  String?
+  enabled         Boolean           @default(false)
+  payload         Json?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@unique([key, organizationId])
+}
+
+model AppSetting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
