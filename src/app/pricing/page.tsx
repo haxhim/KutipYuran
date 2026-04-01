@@ -2,6 +2,8 @@ import { SiteHeader } from "@/components/layout/site-header";
 import { Card, CardTitle } from "@/components/ui/card";
 import { listPublicPricingPlans } from "@/modules/saas/saas.service";
 
+export const dynamic = "force-dynamic";
+
 export default async function PricingPage() {
   const plans = await listPublicPricingPlans();
 

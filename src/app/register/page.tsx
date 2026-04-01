@@ -7,6 +7,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { redirectIfSignedIn } from "@/lib/auth-redirects";
 import { listPublicPricingPlans } from "@/modules/saas/saas.service";
 
+export const dynamic = "force-dynamic";
+
 export default async function RegisterPage() {
   const user = await getCurrentUser();
   redirectIfSignedIn(user);

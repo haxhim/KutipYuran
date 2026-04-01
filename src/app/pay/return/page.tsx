@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { getCheckoutStatus } from "@/modules/saas/saas.service";
 
+export const dynamic = "force-dynamic";
+
 export default async function PaymentReturnPage({ searchParams }: { searchParams: Promise<{ status?: string; billing?: string; kind?: string; checkout?: string }> }) {
   const params = await searchParams;
   const checkout = params.checkout ? await getCheckoutStatus(params.checkout) : null;
