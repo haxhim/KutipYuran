@@ -44,4 +44,4 @@ RUN npm install
 COPY . .
 RUN npx prisma generate
 RUN npm run worker:build
-CMD ["node", "dist/worker/index.js"]
+CMD ["node", "dist/worker/worker/index.js"]
