@@ -5,8 +5,8 @@ services:
       dockerfile: Dockerfile
     env_file:
       - .env
-    ports:
-      - "3000:3000"
+    expose:
+      - "3000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -42,8 +42,8 @@ services:
       POSTGRES_DB: kutipyuran
       POSTGRES_USER: kutipyuran
       POSTGRES_PASSWORD: kutipyuran
-    ports:
-      - "5432:5432"
+    expose:
+      - "5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -54,8 +54,8 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    expose:
+      - "6379"
     volumes:
       - redis_data:/data
 
