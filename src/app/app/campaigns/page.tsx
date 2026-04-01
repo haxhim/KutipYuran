@@ -1,30 +1,56 @@
-import { Card, CardTitle } from "@/components/ui/card";
+import { BillingRecordStatus, WhatsAppSessionStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireTenantContext } from "@/modules/tenant/tenant-context";
+import { CampaignsConsole } from "@/app/app/campaigns/campaigns-console";
 
 export default async function CampaignsPage() {
   const tenant = await requireTenantContext();
-  const campaigns = await db.reminderCampaign.findMany({
-    where: { organizationId: tenant.organizationId },
-    orderBy: { createdAt: "desc" },
-  });
+  const [campaigns, eligibleBillings, connectedSessions] = await Promise.all([
+    db.reminderCampaign.findMany({
+      where: { organizationId: tenant.organizationId },
+      orderBy: { createdAt: "desc" },
+    }),
+    db.billingRecord.count({
+      where: {
+        organizationId: tenant.organizationId,
+        status: {
+          in: [
+            BillingRecordStatus.PENDING,
+            BillingRecordStatus.SENT,
+            BillingRecordStatus.UNPAID,
+            BillingRecordStatus.OVERDUE,
+            BillingRecordStatus.PARTIAL,
+          ],
+        },
+        customer: {
+          deletedAt: null,
+        },
+      },
+    }),
+    db.whatsAppSession.count({
+      where: {
+        organizationId: tenant.organizationId,
+        status: WhatsAppSessionStatus.CONNECTED,
+      },
+    }),
+  ]);
 
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">Campaigns</h1>
-      <Card>
-        <CardTitle>Reminder campaigns</CardTitle>
-        <div className="mt-4 space-y-3">
-          {campaigns.map((campaign) => (
-            <div key={campaign.id} className="rounded-xl bg-muted p-4 text-sm">
-              <p className="font-medium">{campaign.name}</p>
-              <p>Status: {campaign.status}</p>
-              <p>Recipients: {campaign.totalRecipients}</p>
-            </div>
-          ))}
-        </div>
-      </Card>
+      <CampaignsConsole
+        campaigns={campaigns.map((campaign) => ({
+          id: campaign.id,
+          name: campaign.name,
+          status: campaign.status,
+          totalRecipients: campaign.totalRecipients,
+          sentCount: campaign.sentCount,
+          failedCount: campaign.failedCount,
+          createdAt: campaign.createdAt.toISOString(),
+        }))}
+        connectedSessions={connectedSessions}
+        eligibleBillings={eligibleBillings}
+      />
     </div>
   );
 }
-

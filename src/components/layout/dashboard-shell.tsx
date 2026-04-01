@@ -1,27 +1,37 @@
 import type { Route } from "next";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
+import { db } from "@/lib/db";
 
-const nav: ReadonlyArray<readonly [string, Route]> = [
-  ["Dashboard", "/app"],
-  ["Organization Settings", "/app/settings"],
-  ["Subscription & Billing", "/app/subscription"],
-  ["WhatsApp Connection", "/app/whatsapp"],
-  ["Plans & Pricing", "/app/plans"],
-  ["Customers / Payers", "/app/customers"],
-  ["Imports", "/app/imports"],
-  ["Billings / Invoices", "/app/billings"],
-  ["Campaigns", "/app/campaigns"],
-  ["Payment Records", "/app/payments"],
-  ["Reports / Analytics", "/app/reports"],
-  ["Integrations", "/app/integrations"],
-  ["Team / Members", "/app/team"],
-  ["Audit Logs", "/app/audit-logs"],
-  ["Profile Settings", "/app/profile"],
+const nav: ReadonlyArray<{ label: string; href: Route; demoVisible?: boolean }> = [
+  { label: "Dashboard", href: "/app", demoVisible: true },
+  { label: "Organization Settings", href: "/app/settings" },
+  { label: "Subscription & Billing", href: "/app/subscription" },
+  { label: "WhatsApp Connection", href: "/app/whatsapp", demoVisible: true },
+  { label: "Plans & Pricing", href: "/app/plans" },
+  { label: "Customers / Payers", href: "/app/customers", demoVisible: true },
+  { label: "Imports", href: "/app/imports", demoVisible: true },
+  { label: "Billings / Invoices", href: "/app/billings", demoVisible: true },
+  { label: "Campaigns", href: "/app/campaigns", demoVisible: true },
+  { label: "Payment Records", href: "/app/payments", demoVisible: true },
+  { label: "Reports / Analytics", href: "/app/reports" },
+  { label: "Integrations", href: "/app/integrations" },
+  { label: "Team / Members", href: "/app/team" },
+  { label: "Audit Logs", href: "/app/audit-logs" },
+  { label: "Profile Settings", href: "/app/profile" },
 ];
 
 export async function DashboardShell({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
+  const primaryOrganizationId = user?.memberships[0]?.organizationId;
+  const organization = primaryOrganizationId
+    ? await db.organization.findUnique({
+        where: { id: primaryOrganizationId },
+        select: { slug: true },
+      })
+    : null;
+  const isDemoOrganization = organization?.slug === "demo-tuition-centre";
+  const visibleNav = nav.filter((item) => !isDemoOrganization || item.demoVisible);
 
   return (
     <div className="min-h-screen bg-background">
@@ -32,9 +42,9 @@ export async function DashboardShell({ children }: { children: React.ReactNode }
             <p className="font-semibold">{user?.fullName || "Guest"}</p>
           </div>
           <nav className="space-y-1">
-            {nav.map(([label, href]) => (
-              <Link key={href} href={href} className="block rounded-xl px-3 py-2 text-sm hover:bg-muted">
-                {label}
+            {visibleNav.map((item) => (
+              <Link key={item.href} href={item.href} className="block rounded-xl px-3 py-2 text-sm hover:bg-muted">
+                {item.label}
               </Link>
             ))}
             {user?.isPlatformAdmin ? (

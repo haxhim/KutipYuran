@@ -69,3 +69,105 @@ export async function previewCsvImport(organizationId: string, csvContent: strin
   };
 }
 
+export async function applyCsvImport(organizationId: string, csvContent: string) {
+  const preview = await previewCsvImport(organizationId, csvContent);
+
+  if (preview.errors.length) {
+    throw new Error(preview.errors[0]?.message || "CSV import validation failed");
+  }
+
+  if (preview.duplicates.length) {
+    throw new Error(`Duplicate WhatsApp numbers found in CSV: ${preview.duplicates.join(", ")}`);
+  }
+
+  const feePlans = await db.feePlan.findMany({
+    where: { organizationId, deletedAt: null },
+    select: { id: true, name: true },
+  });
+  const planMap = new Map(feePlans.map((plan) => [plan.name, plan.id]));
+
+  let createdCustomers = 0;
+  let updatedCustomers = 0;
+  let assignmentsUpserted = 0;
+
+  await db.$transaction(async (tx) => {
+    for (const row of preview.previewRows) {
+      if (!row.name || !row.normalizedWhatsapp) {
+        throw new Error(`Row ${row.rowNumber} is missing a valid name or WhatsApp number`);
+      }
+
+      const existing = await tx.customer.findUnique({
+        where: {
+          organizationId_normalizedWhatsapp: {
+            organizationId,
+            normalizedWhatsapp: row.normalizedWhatsapp,
+          },
+        },
+      });
+
+      const customer = existing
+        ? await tx.customer.update({
+            where: { id: existing.id },
+            data: {
+              fullName: row.name,
+              phoneNumber: row.waNumber,
+              normalizedWhatsapp: row.normalizedWhatsapp,
+              deletedAt: null,
+            },
+          })
+        : await tx.customer.create({
+            data: {
+              organizationId,
+              fullName: row.name,
+              firstName: row.name.split(" ")[0] || row.name,
+              phoneNumber: row.waNumber,
+              normalizedWhatsapp: row.normalizedWhatsapp,
+            },
+          });
+
+      if (existing) {
+        updatedCustomers += 1;
+      } else {
+        createdCustomers += 1;
+      }
+
+      for (const assignment of row.assignments) {
+        const feePlanId = planMap.get(assignment.planName);
+        if (!feePlanId) {
+          throw new Error(`Plan not found during import: ${assignment.planName}`);
+        }
+
+        await tx.customerPlanAssignment.upsert({
+          where: {
+            customerId_feePlanId: {
+              customerId: customer.id,
+              feePlanId,
+            },
+          },
+          update: {
+            organizationId,
+            quantity: assignment.quantity,
+            active: true,
+            endDate: null,
+          },
+          create: {
+            organizationId,
+            customerId: customer.id,
+            feePlanId,
+            quantity: assignment.quantity,
+            active: true,
+          },
+        });
+
+        assignmentsUpserted += 1;
+      }
+    }
+  });
+
+  return {
+    processedRows: preview.previewRows.length,
+    createdCustomers,
+    updatedCustomers,
+    assignmentsUpserted,
+  };
+}

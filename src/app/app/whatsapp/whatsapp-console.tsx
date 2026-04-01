@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -80,6 +81,28 @@ export function WhatsappConsole({ sessions }: { sessions: WhatsappSessionItem[] 
     setStatusMessage(`Test message sent to ${phoneNumber}. Remove this helper later if you do not need it anymore.`);
   }
 
+  async function removeSession(sessionId: string, label: string) {
+    const confirmed = window.confirm(`Delete WhatsApp session "${label}"? This will remove the linked device session from this app.`);
+    if (!confirmed) {
+      return;
+    }
+
+    setStatusMessage("");
+    const response = await fetch(`/api/whatsapp/sessions/${sessionId}`, {
+      method: "DELETE",
+    });
+
+    const payload = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      setStatusMessage(payload?.error || "Failed to delete WhatsApp session.");
+      return;
+    }
+
+    setStatusMessage(`WhatsApp session "${label}" deleted.`);
+    startTransition(() => router.refresh());
+  }
+
   return (
     <div className="space-y-6">
       <Card>
@@ -87,6 +110,13 @@ export function WhatsappConsole({ sessions }: { sessions: WhatsappSessionItem[] 
         <CardDescription className="mt-2">
           Create a tenant-linked WhatsApp session, then scan the QR below from your phone.
         </CardDescription>
+        <p className="mt-3 text-sm text-muted-foreground">
+          Bulk reminder blasting now runs from{" "}
+          <Link className="font-semibold text-primary" href="/app/campaigns">
+            Campaigns
+          </Link>
+          {" "}after your WhatsApp session is connected.
+        </p>
         <div className="mt-4 flex flex-col gap-3 md:flex-row">
           <Input value={newLabel} onChange={(event) => setNewLabel(event.target.value)} placeholder="Session label" />
           <Button disabled={isPending} onClick={createSession} type="button">
@@ -127,12 +157,20 @@ export function WhatsappConsole({ sessions }: { sessions: WhatsappSessionItem[] 
                 <Button disabled={isPending} onClick={() => refreshSession(session.id)} type="button" variant="outline">
                   Refresh Session
                 </Button>
+                <Button
+                  disabled={isPending}
+                  onClick={() => removeSession(session.id, session.label)}
+                  type="button"
+                  variant="destructive"
+                >
+                  Delete Session
+                </Button>
               </div>
 
               <div className="rounded-xl bg-muted p-4">
-                <p className="text-sm font-semibold">Temporary Test Send</p>
+                <p className="text-sm font-semibold">Direct Test Send</p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Enter a WhatsApp number and send a removable verification message from this session.
+                  Enter a WhatsApp number and send a one-off verification message from this session before running a full campaign.
                 </p>
                 <div className="mt-3 flex flex-col gap-3 md:flex-row">
                   <Input
@@ -164,4 +202,3 @@ export function WhatsappConsole({ sessions }: { sessions: WhatsappSessionItem[] 
     </div>
   );
 }
-

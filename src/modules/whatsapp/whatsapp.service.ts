@@ -138,6 +138,24 @@ export async function sendWhatsappMessage(sessionKey: string, phoneNumber: strin
   return client.sendMessage(toWhatsappJid(phoneNumber), message);
 }
 
+export async function removeWhatsappSession(sessionKey: string, sessionId: string) {
+  const client = clients.get(sessionKey);
+  clients.delete(sessionKey);
+
+  if (client) {
+    await client.destroy().catch(() => undefined);
+  }
+
+  const storagePath = getWhatsappSessionStoragePath(sessionKey);
+  if (fs.existsSync(storagePath)) {
+    fs.rmSync(storagePath, { recursive: true, force: true });
+  }
+
+  await db.whatsAppSession.delete({
+    where: { id: sessionId },
+  });
+}
+
 export function getWhatsappSessionStoragePath(sessionKey: string) {
   return path.join(env.WHATSAPP_SESSION_ROOT, `.wwebjs_auth/session-${sessionKey}`);
 }

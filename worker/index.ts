@@ -36,6 +36,13 @@ new Worker(
       return;
     }
 
+    await db.reminderCampaignRecipient.update({
+      where: { id: recipient.id },
+      data: {
+        status: ReminderRecipientStatus.PROCESSING,
+      },
+    });
+
     const planSummary = recipient.billingRecord.items.map((item) => `${item.title} x${item.quantity}`).join(", ");
     const body = renderMessageTemplate({
       body: template.body,
