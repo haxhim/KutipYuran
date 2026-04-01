@@ -105,7 +105,7 @@ async function main() {
     create: {
       organizationId: organization.id,
       userId: owner.id,
-      role: MemberRole.TENANT,
+      role: MemberRole.USER,
       joinedAt: new Date(),
     },
   });

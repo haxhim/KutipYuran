@@ -63,14 +63,14 @@ export async function inviteTeamMember(args: {
       },
     },
     update: {
-      role: MemberRole.TENANT,
+      role: MemberRole.USER,
       invitedAt: new Date(),
       joinedAt: null,
     },
     create: {
       organizationId: args.organizationId,
       userId: user.id,
-      role: MemberRole.TENANT,
+      role: MemberRole.USER,
       invitedAt: new Date(),
     },
     include: {

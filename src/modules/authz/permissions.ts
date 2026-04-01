@@ -33,7 +33,8 @@ const tenantPermissions: PermissionKey[] = [
 ];
 
 const rolePermissions: Record<MemberRole, PermissionKey[]> = {
-  TENANT: tenantPermissions,
+  ADMIN: tenantPermissions,
+  USER: tenantPermissions,
 };
 
 export function roleHasPermission(role: MemberRole, permission: PermissionKey) {

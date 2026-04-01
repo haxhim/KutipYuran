@@ -22,7 +22,7 @@ export async function registerOrganizationOwner(input: {
       status: UserStatus.ACTIVE,
       memberships: {
         create: {
-          role: MemberRole.TENANT,
+          role: MemberRole.USER,
           joinedAt: new Date(),
           organization: {
             create: {

@@ -14,7 +14,8 @@ enum UserStatus {
 }
 
 enum MemberRole {
-  TENANT
+  ADMIN
+  USER
 }
 
 enum SubscriptionStatus {
