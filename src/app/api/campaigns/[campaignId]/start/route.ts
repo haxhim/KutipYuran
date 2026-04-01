@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { requireTenantContext } from "@/modules/tenant/tenant-context";
+import { permissions } from "@/modules/authz/permissions";
+import { requireTenantPermission } from "@/modules/tenant/tenant-context";
 import { startCampaign } from "@/modules/campaigns/campaign.service";
 
 export async function POST(_: Request, { params }: { params: Promise<{ campaignId: string }> }) {
-  const tenant = await requireTenantContext();
+  const tenant = await requireTenantPermission(permissions.createCampaigns);
   const { campaignId } = await params;
 
   try {

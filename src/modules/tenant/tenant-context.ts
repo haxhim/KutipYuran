@@ -1,5 +1,7 @@
 import { db } from "@/lib/db";
+import { hasPermission } from "@/lib/rbac";
 import { getCurrentUser } from "@/lib/auth";
+import type { PermissionKey } from "@/modules/authz/permissions";
 
 export async function requireTenantContext(slug?: string) {
   const user = await getCurrentUser();
@@ -33,4 +35,18 @@ export async function requireTenantContext(slug?: string) {
     organizationId,
     role: membership?.role,
   };
+}
+
+export async function requireTenantPermission(permission: PermissionKey, slug?: string) {
+  const tenant = await requireTenantContext(slug);
+
+  if (tenant.user.isPlatformAdmin) {
+    return tenant;
+  }
+
+  if (!tenant.role || !hasPermission(tenant.role, permission)) {
+    throw new Error("Forbidden");
+  }
+
+  return tenant;
 }

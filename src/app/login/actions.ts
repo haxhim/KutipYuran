@@ -6,12 +6,12 @@ import { createSession } from "@/lib/auth";
 import { authenticateUser } from "@/modules/auth/auth.service";
 
 export async function loginAction(formData: FormData) {
-  const email = String(formData.get("email") || "");
+  const email = String(formData.get("email") || "").trim();
   const password = String(formData.get("password") || "");
   const user = await authenticateUser(email, password);
 
   if (!user) {
-    throw new Error("Invalid credentials");
+    redirect(`/login?error=invalid_credentials&email=${encodeURIComponent(email)}`);
   }
 
   const requestHeaders = await headers();

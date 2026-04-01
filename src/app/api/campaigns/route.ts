@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireTenantContext } from "@/modules/tenant/tenant-context";
+import { permissions } from "@/modules/authz/permissions";
+import { requireTenantPermission } from "@/modules/tenant/tenant-context";
 import { createBillingReminderCampaign } from "@/modules/campaigns/campaign.service";
 
 export async function POST(request: NextRequest) {
-  const tenant = await requireTenantContext();
+  const tenant = await requireTenantPermission(permissions.createCampaigns);
   const body = await request.json();
   const name = String(body.name || "").trim() || `Reminder Blast ${new Date().toLocaleDateString("en-CA")}`;
 

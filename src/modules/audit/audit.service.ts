@@ -23,3 +23,23 @@ export async function createAuditLog(input: {
   });
 }
 
+export async function listAuditLogs(organizationId: string, args?: { action?: string; entityType?: string; limit?: number }) {
+  return db.auditLog.findMany({
+    where: {
+      organizationId,
+      action: args?.action || undefined,
+      entityType: args?.entityType || undefined,
+    },
+    orderBy: { createdAt: "desc" },
+    take: args?.limit || 100,
+    include: {
+      user: {
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+        },
+      },
+    },
+  });
+}

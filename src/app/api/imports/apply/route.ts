@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireTenantContext } from "@/modules/tenant/tenant-context";
+import { permissions } from "@/modules/authz/permissions";
+import { requireTenantPermission } from "@/modules/tenant/tenant-context";
 import { applyCsvImport } from "@/modules/imports/import.service";
 
 export async function POST(request: NextRequest) {
-  const tenant = await requireTenantContext();
+  const tenant = await requireTenantPermission(permissions.manageCustomers);
   const body = await request.json();
 
   try {

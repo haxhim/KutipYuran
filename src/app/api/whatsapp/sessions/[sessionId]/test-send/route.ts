@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { normalizeMalaysiaPhone } from "@/lib/phone";
-import { requireTenantContext } from "@/modules/tenant/tenant-context";
+import { permissions } from "@/modules/authz/permissions";
+import { requireTenantPermission } from "@/modules/tenant/tenant-context";
 import { getOrCreateWhatsappClient, sendWhatsappMessage } from "@/modules/whatsapp/whatsapp.service";
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ sessionId: string }> }) {
-  const tenant = await requireTenantContext();
+  const tenant = await requireTenantPermission(permissions.manageWhatsapp);
   const { sessionId } = await params;
   const body = await request.json();
   const phoneNumber = normalizeMalaysiaPhone(String(body.phoneNumber || ""));
@@ -34,4 +35,3 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     messageId: result.id?._serialized || null,
   });
 }
-
