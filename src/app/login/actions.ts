@@ -20,6 +20,5 @@ export async function loginAction(formData: FormData) {
     userAgent: requestHeaders.get("user-agent") || undefined,
   });
 
-  redirect("/app");
+  redirect(user.isPlatformAdmin ? "/admin" : "/app");
 }
-
