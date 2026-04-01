@@ -5,14 +5,25 @@ declare global {
   var redis: IORedis | undefined;
 }
 
-export const redis =
-  global.redis ||
-  new IORedis(env.REDIS_URL, {
+function createRedisClient() {
+  return new IORedis(env.REDIS_URL, {
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
   });
-
-if (process.env.NODE_ENV !== "production") {
-  global.redis = redis;
 }
 
+function getRedisClient() {
+  if (!global.redis) {
+    global.redis = createRedisClient();
+  }
+
+  return global.redis;
+}
+
+export const redis = new Proxy({} as IORedis, {
+  get(_target, property, receiver) {
+    const client = getRedisClient();
+    const value = Reflect.get(client, property, receiver);
+    return typeof value === "function" ? value.bind(client) : value;
+  },
+});

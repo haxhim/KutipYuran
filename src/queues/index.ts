@@ -8,10 +8,30 @@ export const queueNames = {
   importProcessing: "import-processing",
 };
 
-export const whatsappSendQueue = new Queue(queueNames.whatsappSend, { connection: redis });
-export const billingGenerationQueue = new Queue(queueNames.billingGeneration, { connection: redis });
-export const webhookProcessingQueue = new Queue(queueNames.webhookProcessing, { connection: redis });
-export const importProcessingQueue = new Queue(queueNames.importProcessing, { connection: redis });
+const queueCache = new Map<string, Queue>();
+
+function getQueue(name: string) {
+  if (!queueCache.has(name)) {
+    queueCache.set(name, new Queue(name, { connection: redis }));
+  }
+
+  return queueCache.get(name)!;
+}
+
+function createQueueProxy(name: string) {
+  return new Proxy({} as Queue, {
+    get(_target, property, receiver) {
+      const queue = getQueue(name);
+      const value = Reflect.get(queue, property, receiver);
+      return typeof value === "function" ? value.bind(queue) : value;
+    },
+  });
+}
+
+export const whatsappSendQueue = createQueueProxy(queueNames.whatsappSend);
+export const billingGenerationQueue = createQueueProxy(queueNames.billingGeneration);
+export const webhookProcessingQueue = createQueueProxy(queueNames.webhookProcessing);
+export const importProcessingQueue = createQueueProxy(queueNames.importProcessing);
 
 export async function enqueueCampaignRecipients(items: Array<{ campaignId: string; recipientId: string; organizationId: string }>) {
   return whatsappSendQueue.addBulk(
@@ -31,4 +51,3 @@ export async function enqueueCampaignRecipients(items: Array<{ campaignId: strin
     })),
   );
 }
-

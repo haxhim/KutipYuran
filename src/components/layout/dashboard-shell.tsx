@@ -1,7 +1,8 @@
+import type { Route } from "next";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 
-const nav = [
+const nav: ReadonlyArray<readonly [string, Route]> = [
   ["Dashboard", "/app"],
   ["Organization Settings", "/app/settings"],
   ["Subscription & Billing", "/app/subscription"],
@@ -48,4 +49,3 @@ export async function DashboardShell({ children }: { children: React.ReactNode }
     </div>
   );
 }
-

@@ -19,7 +19,9 @@ const envSchema = z.object({
   PLATFORM_FEE_PERCENT: z.coerce.number().min(0).max(100).default(0),
 });
 
-export const env = envSchema.parse({
+type Env = z.infer<typeof envSchema>;
+
+const rawEnv = {
   NODE_ENV: process.env.NODE_ENV,
   APP_URL: process.env.APP_URL,
   DATABASE_URL: process.env.DATABASE_URL,
@@ -36,5 +38,24 @@ export const env = envSchema.parse({
   TOYYIBPAY_CATEGORY_CODE: process.env.TOYYIBPAY_CATEGORY_CODE,
   TOYYIBPAY_SECRET_KEY: process.env.TOYYIBPAY_SECRET_KEY,
   PLATFORM_FEE_PERCENT: process.env.PLATFORM_FEE_PERCENT,
-});
+};
 
+type EnvKey = keyof Env;
+
+function readEnv<K extends EnvKey>(key: K): Env[K] {
+  const fieldSchema = envSchema.shape[key];
+  const result = fieldSchema.safeParse(rawEnv[key]);
+
+  if (result.success) {
+    return result.data as Env[K];
+  }
+
+  const issue = result.error.issues[0];
+  throw new Error(`[env] ${String(key)}: ${issue?.message || "Invalid value"}`);
+}
+
+export const env = new Proxy({} as Env, {
+  get(_target, property: string) {
+    return readEnv(property as EnvKey);
+  },
+});

@@ -1,7 +1,8 @@
+import type { Route } from "next";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
-const navItems = [
+const navItems: ReadonlyArray<{ href: Route; label: string }> = [
   { href: "/features", label: "Features" },
   { href: "/pricing", label: "Pricing" },
   { href: "/faq", label: "FAQ" },
@@ -34,4 +35,3 @@ export function SiteHeader() {
     </header>
   );
 }
-
