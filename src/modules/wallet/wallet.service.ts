@@ -39,6 +39,20 @@ export async function markGatewayPaymentPaid(args: {
   provider: PaymentProvider;
 }) {
   return db.$transaction(async (tx) => {
+    const transaction = await tx.paymentTransaction.findUniqueOrThrow({
+      where: { id: args.paymentTransactionId },
+      include: {
+        ledgerEntries: true,
+      },
+    });
+
+    const alreadyReceived = transaction.ledgerEntries.some((entry) => entry.type === WalletLedgerType.PAYMENT_RECEIVED);
+    if (alreadyReceived || transaction.status === PaymentTransactionStatus.PAID) {
+      return { applied: false };
+    }
+
+    const hasPendingLedger = transaction.ledgerEntries.some((entry) => entry.type === WalletLedgerType.PAYMENT_PENDING);
+
     await tx.paymentTransaction.update({
       where: { id: args.paymentTransactionId },
       data: {
@@ -63,7 +77,7 @@ export async function markGatewayPaymentPaid(args: {
         type: WalletLedgerType.PAYMENT_RECEIVED,
         amount: args.amount,
         balanceDeltaAvailable: args.amount,
-        balanceDeltaPending: new Prisma.Decimal(args.amount).negated(),
+        balanceDeltaPending: hasPendingLedger ? new Prisma.Decimal(args.amount).negated() : new Prisma.Decimal(0),
         referenceId: args.billingRecordId,
         externalProvider: args.provider,
       },
@@ -73,10 +87,12 @@ export async function markGatewayPaymentPaid(args: {
       where: { organizationId: args.organizationId },
       data: {
         availableBalance: { increment: args.amount },
-        pendingBalance: { decrement: args.amount },
+        pendingBalance: hasPendingLedger ? { decrement: args.amount } : undefined,
         totalEarned: { increment: args.amount },
       },
     });
+
+    return { applied: true };
   });
 }
 

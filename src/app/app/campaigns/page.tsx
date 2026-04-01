@@ -47,6 +47,7 @@ export default async function CampaignsPage() {
           sentCount: campaign.sentCount,
           failedCount: campaign.failedCount,
           createdAt: campaign.createdAt.toISOString(),
+          scheduledAt: campaign.scheduledAt?.toISOString() || null,
         }))}
         connectedSessions={connectedSessions}
         eligibleBillings={eligibleBillings}

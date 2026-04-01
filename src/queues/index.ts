@@ -3,6 +3,7 @@ import { redis } from "@/lib/redis";
 
 export const queueNames = {
   whatsappSend: "whatsapp-send",
+  campaignStart: "campaign-start",
   billingGeneration: "billing-generation",
   webhookProcessing: "webhook-processing",
   importProcessing: "import-processing",
@@ -29,6 +30,7 @@ function createQueueProxy(name: string) {
 }
 
 export const whatsappSendQueue = createQueueProxy(queueNames.whatsappSend);
+export const campaignStartQueue = createQueueProxy(queueNames.campaignStart);
 export const billingGenerationQueue = createQueueProxy(queueNames.billingGeneration);
 export const webhookProcessingQueue = createQueueProxy(queueNames.webhookProcessing);
 export const importProcessingQueue = createQueueProxy(queueNames.importProcessing);
@@ -50,4 +52,33 @@ export async function enqueueCampaignRecipients(items: Array<{ campaignId: strin
       },
     })),
   );
+}
+
+export async function enqueueCampaignStart(item: {
+  campaignId: string;
+  organizationId: string;
+  delayMs?: number;
+}) {
+  return campaignStartQueue.add("start-campaign", item, {
+    delay: item.delayMs || 0,
+    attempts: 5,
+    backoff: {
+      type: "exponential",
+      delay: 5000,
+    },
+    removeOnComplete: 1000,
+    removeOnFail: 1000,
+  });
+}
+
+export async function enqueueImportProcessing(item: { importJobId: string }) {
+  return importProcessingQueue.add("process-import-job", item, {
+    attempts: 3,
+    backoff: {
+      type: "exponential",
+      delay: 3000,
+    },
+    removeOnComplete: 1000,
+    removeOnFail: 1000,
+  });
 }

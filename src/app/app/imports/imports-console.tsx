@@ -18,11 +18,34 @@ type ImportPreview = {
   duplicates: string[];
 };
 
-export function ImportsConsole({ feePlans }: { feePlans: string[] }) {
+type ImportJobItem = {
+  id: string;
+  originalFileName: string;
+  status: string;
+  totalRows: number;
+  successRows: number;
+  failedRows: number;
+  createdAt: string;
+  rowErrors: Array<{
+    id: string;
+    rowNumber: number;
+    message: string;
+  }>;
+};
+
+export function ImportsConsole({
+  feePlans,
+  importJobs,
+}: {
+  feePlans: string[];
+  importJobs: ImportJobItem[];
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [csvContent, setCsvContent] = useState("");
   const [preview, setPreview] = useState<ImportPreview | null>(null);
+  const [previewJobId, setPreviewJobId] = useState<string | null>(null);
+  const [originalFileName, setOriginalFileName] = useState("customers-import.csv");
   const [statusMessage, setStatusMessage] = useState("");
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
@@ -31,7 +54,9 @@ export function ImportsConsole({ feePlans }: { feePlans: string[] }) {
 
     const text = await file.text();
     setCsvContent(text);
+    setOriginalFileName(file.name);
     setPreview(null);
+    setPreviewJobId(null);
     setStatusMessage(`Loaded ${file.name}. Preview it before importing.`);
   }
 
@@ -40,7 +65,7 @@ export function ImportsConsole({ feePlans }: { feePlans: string[] }) {
     const response = await fetch("/api/imports/preview", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ csvContent }),
+      body: JSON.stringify({ csvContent, originalFileName }),
     });
 
     const payload = await response.json().catch(() => null);
@@ -50,32 +75,32 @@ export function ImportsConsole({ feePlans }: { feePlans: string[] }) {
       return;
     }
 
-    setPreview(payload);
-    setStatusMessage("Preview generated. Check the rows below before importing.");
+    setPreview(payload.preview);
+    setPreviewJobId(payload.job.id);
+    setStatusMessage(`Preview generated and saved as import job ${payload.job.id}.`);
+    startTransition(() => router.refresh());
   }
 
-  async function applyImport() {
+  async function applyImport(importJobId?: string) {
     setStatusMessage("");
     const response = await fetch("/api/imports/apply", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ csvContent }),
+      body: JSON.stringify(importJobId ? { importJobId } : { csvContent, originalFileName }),
     });
 
     const payload = await response.json().catch(() => null);
 
     if (!response.ok) {
-      setStatusMessage(payload?.error || "Failed to import customers.");
+      setStatusMessage(payload?.error || "Failed to queue import.");
       return;
     }
 
-    setStatusMessage(
-      `Imported ${payload.processedRows} row(s): ${payload.createdCustomers} new customer(s), ${payload.updatedCustomers} updated, ${payload.assignmentsUpserted} plan assignment(s).`,
-    );
+    setStatusMessage(`Import job ${payload.importJobId} queued. Refreshing history...`);
     startTransition(() => router.refresh());
   }
 
-  const hasBlockingIssues = !preview || preview.errors.length > 0 || preview.duplicates.length > 0;
+  const hasBlockingIssues = !preview || preview.errors.length > 0 || preview.duplicates.length > 0 || !previewJobId;
 
   return (
     <div className="space-y-6">
@@ -83,7 +108,7 @@ export function ImportsConsole({ feePlans }: { feePlans: string[] }) {
         <div>
           <CardTitle>CSV Import</CardTitle>
           <CardDescription className="mt-2">
-            Import customers and assign fee plans using the template format. Existing customers with the same WhatsApp number will be updated.
+            Preview a customer import, then queue the import job for background processing with history and row-level failure tracking.
           </CardDescription>
         </div>
 
@@ -92,8 +117,8 @@ export function ImportsConsole({ feePlans }: { feePlans: string[] }) {
           <Button disabled={isPending || !csvContent.trim()} onClick={previewImport} type="button" variant="outline">
             Preview Import
           </Button>
-          <Button disabled={isPending || hasBlockingIssues} onClick={applyImport} type="button">
-            Import Customers
+          <Button disabled={isPending || hasBlockingIssues} onClick={() => applyImport(previewJobId || undefined)} type="button">
+            Queue Import Job
           </Button>
         </div>
 
@@ -107,6 +132,7 @@ export function ImportsConsole({ feePlans }: { feePlans: string[] }) {
           onChange={(event) => {
             setCsvContent(event.target.value);
             setPreview(null);
+            setPreviewJobId(null);
           }}
           placeholder={"Name,WaNumber,Plans & Quantity\nAli Bin Ahmad,60129259193,\"Monthly Fee {1}, Exam Fee {1}\""}
           value={csvContent}
@@ -164,6 +190,44 @@ export function ImportsConsole({ feePlans }: { feePlans: string[] }) {
           </div>
         </Card>
       ) : null}
+
+      <Card>
+        <CardTitle>Import History</CardTitle>
+        <CardDescription className="mt-2">Recent import jobs with statuses and the first row-level failures for operator review.</CardDescription>
+        <div className="mt-4 space-y-3">
+          {importJobs.length ? (
+            importJobs.map((job) => (
+              <div key={job.id} className="rounded-xl bg-muted p-4 text-sm">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div className="space-y-1">
+                    <p className="font-medium">{job.originalFileName}</p>
+                    <p className="text-muted-foreground">Created: {new Date(job.createdAt).toLocaleString()}</p>
+                    <p>
+                      Status: {job.status} | Total: {job.totalRows} | Success: {job.successRows} | Failed: {job.failedRows}
+                    </p>
+                    {job.rowErrors.length ? (
+                      <div className="pt-2 text-xs text-destructive">
+                        {job.rowErrors.map((error) => (
+                          <p key={error.id}>
+                            Row {error.rowNumber}: {error.message}
+                          </p>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                  {job.status === "FAILED" || job.status === "DRAFT" ? (
+                    <Button disabled={isPending} onClick={() => applyImport(job.id)} size="sm" type="button" variant="outline">
+                      Re-run Import
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="rounded-xl bg-muted p-4 text-sm text-muted-foreground">No import jobs yet.</div>
+          )}
+        </div>
+      </Card>
     </div>
   );
 }

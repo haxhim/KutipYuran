@@ -138,6 +138,29 @@ export async function sendWhatsappMessage(sessionKey: string, phoneNumber: strin
   return client.sendMessage(toWhatsappJid(phoneNumber), message);
 }
 
+export async function warmWhatsappSession(sessionKey: string, sessionId: string, organizationId: string) {
+  const client = await getOrCreateWhatsappClient(sessionKey, sessionId, organizationId);
+  const state = typeof client.getState === "function" ? await client.getState().catch(() => null) : null;
+
+  await db.whatsAppSession.update({
+    where: { id: sessionId },
+    data: {
+      lastActiveAt: new Date(),
+    },
+  });
+
+  await db.whatsAppConnectionLog.create({
+    data: {
+      organizationId,
+      whatsappSessionId: sessionId,
+      eventType: "session_warm",
+      message: state ? `WhatsApp warm check completed with state ${String(state)}` : "WhatsApp warm check completed",
+    },
+  });
+
+  return { state };
+}
+
 export async function removeWhatsappSession(sessionKey: string, sessionId: string) {
   const client = clients.get(sessionKey);
   clients.delete(sessionKey);

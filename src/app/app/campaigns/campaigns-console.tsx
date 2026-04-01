@@ -15,6 +15,7 @@ type CampaignItem = {
   sentCount: number;
   failedCount: number;
   createdAt: string;
+  scheduledAt: string | null;
 };
 
 export function CampaignsConsole({
@@ -29,6 +30,7 @@ export function CampaignsConsole({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [campaignName, setCampaignName] = useState(`Reminder Blast ${new Date().toLocaleDateString()}`);
+  const [scheduledAt, setScheduledAt] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
 
   async function createCampaign(startNow: boolean) {
@@ -36,7 +38,7 @@ export function CampaignsConsole({
     const response = await fetch("/api/campaigns", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: campaignName }),
+      body: JSON.stringify({ name: campaignName, scheduledAt: scheduledAt || null }),
     });
 
     const payload = await response.json().catch(() => null);
@@ -61,21 +63,31 @@ export function CampaignsConsole({
       return;
     }
 
-    setStatusMessage("Campaign draft created. Start it when you are ready.");
+    setStatusMessage(
+      scheduledAt ? "Campaign created and scheduled." : "Campaign draft created. Start it when you are ready.",
+    );
     startTransition(() => router.refresh());
   }
 
-  async function startCampaign(campaignId: string) {
+  async function performCampaignAction(campaignId: string, action: "start" | "pause" | "resume" | "retry" | "cancel") {
     setStatusMessage("");
-    const response = await fetch(`/api/campaigns/${campaignId}/start`, { method: "POST" });
+    const response = await fetch(`/api/campaigns/${campaignId}/${action === "start" ? "start" : action}`, { method: "POST" });
     const payload = await response.json().catch(() => null);
 
     if (!response.ok) {
-      setStatusMessage(payload?.error || "Failed to start campaign.");
+      setStatusMessage(payload?.error || `Failed to ${action} campaign.`);
       return;
     }
 
-    setStatusMessage("Campaign queued. Make sure the worker process is running to deliver messages.");
+    const messages: Record<typeof action, string> = {
+      start: "Campaign queued. Make sure the worker process is running to deliver messages.",
+      pause: "Campaign paused. Any unsent recipients remain queued for later resume.",
+      resume: "Campaign resumed.",
+      retry: "Failed recipients re-queued for delivery.",
+      cancel: "Campaign cancelled.",
+    };
+
+    setStatusMessage(messages[action]);
     startTransition(() => router.refresh());
   }
 
@@ -85,7 +97,7 @@ export function CampaignsConsole({
         <div>
           <CardTitle>Blast Unpaid Billings</CardTitle>
           <CardDescription className="mt-2">
-            Build a reminder campaign from billings that are still unpaid, then queue the WhatsApp blast through the worker.
+            Build a reminder campaign from billings that are still unpaid, then send immediately or schedule it for later.
           </CardDescription>
         </div>
 
@@ -104,10 +116,14 @@ export function CampaignsConsole({
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 md:flex-row">
+        <div className="grid gap-3 md:grid-cols-[2fr_1fr]">
           <Input onChange={(event) => setCampaignName(event.target.value)} value={campaignName} />
+          <Input onChange={(event) => setScheduledAt(event.target.value)} type="datetime-local" value={scheduledAt} />
+        </div>
+
+        <div className="flex flex-col gap-3 md:flex-row">
           <Button disabled={isPending || !eligibleBillings} onClick={() => createCampaign(false)} type="button" variant="outline">
-            Save Draft
+            {scheduledAt ? "Schedule Campaign" : "Save Draft"}
           </Button>
           <Button disabled={isPending || !eligibleBillings || !connectedSessions} onClick={() => createCampaign(true)} type="button">
             Blast Now
@@ -136,14 +152,56 @@ export function CampaignsConsole({
                     <p>
                       Recipients: {campaign.totalRecipients} | Sent: {campaign.sentCount} | Failed: {campaign.failedCount}
                     </p>
+                    <p className="text-muted-foreground">
+                      {campaign.scheduledAt ? `Scheduled for ${new Date(campaign.scheduledAt).toLocaleString()}` : "No schedule"}
+                    </p>
                   </div>
                   <div className="flex flex-col gap-2 md:items-end">
                     <Badge>{campaign.status}</Badge>
-                    {campaign.status === "DRAFT" || campaign.status === "PAUSED" ? (
-                      <Button disabled={isPending || !connectedSessions} onClick={() => startCampaign(campaign.id)} size="sm" type="button">
-                        Start Campaign
-                      </Button>
-                    ) : null}
+                    <div className="flex flex-wrap gap-2 md:justify-end">
+                      {(campaign.status === "DRAFT" || campaign.status === "SCHEDULED") && (
+                        <Button
+                          disabled={isPending || !connectedSessions}
+                          onClick={() => performCampaignAction(campaign.id, "start")}
+                          size="sm"
+                          type="button"
+                        >
+                          Start
+                        </Button>
+                      )}
+                      {campaign.status === "RUNNING" && (
+                        <Button disabled={isPending} onClick={() => performCampaignAction(campaign.id, "pause")} size="sm" type="button" variant="outline">
+                          Pause
+                        </Button>
+                      )}
+                      {campaign.status === "PAUSED" && (
+                        <Button disabled={isPending} onClick={() => performCampaignAction(campaign.id, "resume")} size="sm" type="button">
+                          Resume
+                        </Button>
+                      )}
+                      {(campaign.status === "FAILED" || campaign.failedCount > 0) && (
+                        <Button
+                          disabled={isPending || !connectedSessions}
+                          onClick={() => performCampaignAction(campaign.id, "retry")}
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                        >
+                          Retry Failed
+                        </Button>
+                      )}
+                      {campaign.status !== "COMPLETED" && campaign.status !== "CANCELLED" && (
+                        <Button
+                          disabled={isPending}
+                          onClick={() => performCampaignAction(campaign.id, "cancel")}
+                          size="sm"
+                          type="button"
+                          variant="destructive"
+                        >
+                          Cancel
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

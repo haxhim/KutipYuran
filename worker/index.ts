@@ -1,12 +1,13 @@
 import { Worker } from "bullmq";
-import { ImportJobStatus, MessageDirection, Prisma, ReminderRecipientStatus, WebhookStatus, WhatsAppSessionStatus } from "@prisma/client";
+import { MessageDirection, ReminderRecipientStatus, WebhookStatus, WhatsAppSessionStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { redis } from "@/lib/redis";
 import { renderMessageTemplate } from "@/lib/template";
 import { queueNames } from "@/queues";
-import { markRecipientStatus } from "@/modules/campaigns/campaign.service";
+import { markRecipientStatus, startCampaign } from "@/modules/campaigns/campaign.service";
 import { sendWhatsappMessage } from "@/modules/whatsapp/whatsapp.service";
 import { generateBillingForCustomer } from "@/modules/billing/billing.service";
+import { processImportJob } from "@/modules/imports/import.service";
 
 new Worker(
   queueNames.whatsappSend,
@@ -33,6 +34,10 @@ new Worker(
     const template = recipient.reminderCampaign.messageTemplate;
     if (!session || !template || !recipient.billingRecord) {
       await markRecipientStatus(recipient.id, ReminderRecipientStatus.SKIPPED, "Missing session, template, or billing");
+      return;
+    }
+
+    if (recipient.reminderCampaign.status !== "RUNNING") {
       return;
     }
 
@@ -83,6 +88,29 @@ new Worker(
 );
 
 new Worker(
+  queueNames.campaignStart,
+  async (job) => {
+    const { organizationId, campaignId } = job.data as {
+      organizationId: string;
+      campaignId: string;
+    };
+
+    const campaign = await db.reminderCampaign.findUniqueOrThrow({
+      where: { id: campaignId },
+    });
+
+    if (campaign.organizationId !== organizationId) {
+      throw new Error("Campaign organization mismatch");
+    }
+
+    if (campaign.status === "SCHEDULED" || campaign.status === "PAUSED" || campaign.status === "DRAFT") {
+      await startCampaign(organizationId, campaignId);
+    }
+  },
+  { connection: redis },
+);
+
+new Worker(
   queueNames.billingGeneration,
   async (job) => {
     const { organizationId, customerId, dueDate } = job.data as {
@@ -115,12 +143,7 @@ new Worker(
   queueNames.importProcessing,
   async (job) => {
     const { importJobId } = job.data as { importJobId: string };
-    await db.importJob.update({
-      where: { id: importJobId },
-      data: {
-        status: ImportJobStatus.COMPLETED,
-      },
-    });
+    await processImportJob(importJobId);
   },
   { connection: redis },
 );

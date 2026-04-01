@@ -27,6 +27,7 @@ export type WebhookProcessResult = {
   success: boolean;
   status: "paid" | "pending" | "failed";
   providerReference?: string;
+  eventId?: string;
+  signatureValid?: boolean;
   raw?: unknown;
 };
-

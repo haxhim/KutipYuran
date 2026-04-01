@@ -56,6 +56,23 @@ export function WhatsappConsole({ sessions }: { sessions: WhatsappSessionItem[] 
     startTransition(() => router.refresh());
   }
 
+  async function warmSession(sessionId: string) {
+    setStatusMessage("");
+    const response = await fetch(`/api/whatsapp/sessions/${sessionId}/warm`, {
+      method: "POST",
+    });
+
+    const payload = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      setStatusMessage(payload?.error || "Failed to warm WhatsApp session.");
+      return;
+    }
+
+    setStatusMessage(`WhatsApp warmer completed${payload?.state ? ` with state ${payload.state}` : ""}.`);
+    startTransition(() => router.refresh());
+  }
+
   async function sendTest(sessionId: string) {
     setStatusMessage("");
     const phoneNumber = testNumbers[sessionId]?.trim();
@@ -156,6 +173,9 @@ export function WhatsappConsole({ sessions }: { sessions: WhatsappSessionItem[] 
               <div className="flex flex-col gap-3 md:flex-row">
                 <Button disabled={isPending} onClick={() => refreshSession(session.id)} type="button" variant="outline">
                   Refresh Session
+                </Button>
+                <Button disabled={isPending} onClick={() => warmSession(session.id)} type="button" variant="outline">
+                  Warm Session
                 </Button>
                 <Button
                   disabled={isPending}

@@ -1,6 +1,6 @@
 import { BillingRecordStatus, ReminderCampaignStatus, ReminderRecipientStatus } from "@prisma/client";
 import { db } from "@/lib/db";
-import { enqueueCampaignRecipients } from "@/queues";
+import { enqueueCampaignRecipients, enqueueCampaignStart } from "@/queues";
 
 async function getOrCreateDefaultTemplate(organizationId: string) {
   const existing = await db.messageTemplate.findFirst({
@@ -24,11 +24,19 @@ async function getOrCreateDefaultTemplate(organizationId: string) {
   });
 }
 
-export async function createBillingReminderCampaign(organizationId: string, name: string) {
-  const template = await getOrCreateDefaultTemplate(organizationId);
+function getQueuedRecipientStatuses() {
+  return [ReminderRecipientStatus.QUEUED, ReminderRecipientStatus.FAILED];
+}
+
+export async function createBillingReminderCampaign(args: {
+  organizationId: string;
+  name: string;
+  scheduledAt?: Date | null;
+}) {
+  const template = await getOrCreateDefaultTemplate(args.organizationId);
   const billings = await db.billingRecord.findMany({
     where: {
-      organizationId,
+      organizationId: args.organizationId,
       status: {
         in: [
           BillingRecordStatus.PENDING,
@@ -53,30 +61,43 @@ export async function createBillingReminderCampaign(organizationId: string, name
     throw new Error("No unpaid billings with valid WhatsApp numbers were found");
   }
 
-  return db.$transaction(async (tx) => {
-    const campaign = await tx.reminderCampaign.create({
+  const shouldSchedule = Boolean(args.scheduledAt && args.scheduledAt.getTime() > Date.now());
+
+  const campaign = await db.$transaction(async (tx) => {
+    const created = await tx.reminderCampaign.create({
       data: {
-        organizationId,
-        name,
-        status: ReminderCampaignStatus.DRAFT,
+        organizationId: args.organizationId,
+        name: args.name,
+        status: shouldSchedule ? ReminderCampaignStatus.SCHEDULED : ReminderCampaignStatus.DRAFT,
         messageTemplateId: template.id,
         totalRecipients: recipients.length,
+        scheduledAt: shouldSchedule ? args.scheduledAt : null,
       },
     });
 
     await tx.reminderCampaignRecipient.createMany({
       data: recipients.map((billing) => ({
-        organizationId,
-        reminderCampaignId: campaign.id,
+        organizationId: args.organizationId,
+        reminderCampaignId: created.id,
         customerId: billing.customerId,
         billingRecordId: billing.id,
         status: ReminderRecipientStatus.QUEUED,
-        dedupeKey: `${campaign.id}:${billing.customerId}:${billing.id}`,
+        dedupeKey: `${created.id}:${billing.customerId}:${billing.id}`,
       })),
     });
 
-    return campaign;
+    return created;
   });
+
+  if (shouldSchedule && args.scheduledAt) {
+    await enqueueCampaignStart({
+      campaignId: campaign.id,
+      organizationId: args.organizationId,
+      delayMs: Math.max(args.scheduledAt.getTime() - Date.now(), 0),
+    });
+  }
+
+  return campaign;
 }
 
 export async function startCampaign(organizationId: string, campaignId: string) {
@@ -86,12 +107,20 @@ export async function startCampaign(organizationId: string, campaignId: string) 
       recipients: {
         where: {
           status: {
-            in: [ReminderRecipientStatus.QUEUED, ReminderRecipientStatus.FAILED],
+            in: getQueuedRecipientStatuses(),
           },
         },
       },
     },
   });
+
+  if (campaign.status === ReminderCampaignStatus.CANCELLED) {
+    throw new Error("Cancelled campaigns cannot be started again");
+  }
+
+  if (campaign.status === ReminderCampaignStatus.RUNNING) {
+    throw new Error("Campaign is already running");
+  }
 
   if (!campaign.recipients.length) {
     throw new Error("This campaign has no queued recipients left to send");
@@ -124,6 +153,91 @@ export async function pauseCampaign(organizationId: string, campaignId: string) 
   });
 }
 
+export async function resumeCampaign(organizationId: string, campaignId: string) {
+  const campaign = await db.reminderCampaign.findFirstOrThrow({
+    where: { id: campaignId, organizationId },
+  });
+
+  if (campaign.status !== ReminderCampaignStatus.PAUSED && campaign.status !== ReminderCampaignStatus.SCHEDULED) {
+    throw new Error("Only paused or scheduled campaigns can be resumed");
+  }
+
+  if (campaign.scheduledAt && campaign.scheduledAt.getTime() > Date.now()) {
+    await db.reminderCampaign.update({
+      where: { id: campaign.id },
+      data: {
+        status: ReminderCampaignStatus.SCHEDULED,
+      },
+    });
+
+    await enqueueCampaignStart({
+      campaignId: campaign.id,
+      organizationId,
+      delayMs: Math.max(campaign.scheduledAt.getTime() - Date.now(), 0),
+    });
+
+    return campaign;
+  }
+
+  return startCampaign(organizationId, campaignId);
+}
+
+export async function cancelCampaign(organizationId: string, campaignId: string) {
+  return db.$transaction(async (tx) => {
+    await tx.reminderCampaignRecipient.updateMany({
+      where: {
+        organizationId,
+        reminderCampaignId: campaignId,
+        status: {
+          in: [ReminderRecipientStatus.QUEUED, ReminderRecipientStatus.PROCESSING],
+        },
+      },
+      data: {
+        status: ReminderRecipientStatus.CANCELLED,
+        lastError: "Campaign cancelled by operator",
+      },
+    });
+
+    return tx.reminderCampaign.update({
+      where: { id: campaignId, organizationId },
+      data: {
+        status: ReminderCampaignStatus.CANCELLED,
+        completedAt: new Date(),
+      },
+    });
+  });
+}
+
+export async function retryCampaignFailures(organizationId: string, campaignId: string) {
+  const reset = await db.reminderCampaignRecipient.updateMany({
+    where: {
+      organizationId,
+      reminderCampaignId: campaignId,
+      status: {
+        in: [ReminderRecipientStatus.FAILED, ReminderRecipientStatus.SKIPPED],
+      },
+    },
+    data: {
+      status: ReminderRecipientStatus.QUEUED,
+      lastError: null,
+    },
+  });
+
+  if (!reset.count) {
+    throw new Error("No failed recipients were available to retry");
+  }
+
+  await db.reminderCampaign.update({
+    where: { id: campaignId, organizationId },
+    data: {
+      status: ReminderCampaignStatus.DRAFT,
+      completedAt: null,
+    },
+  });
+
+  return startCampaign(organizationId, campaignId);
+}
+
 export async function markRecipientStatus(recipientId: string, status: ReminderRecipientStatus, error?: string) {
   return db.$transaction(async (tx) => {
     const recipient = await tx.reminderCampaignRecipient.update({
@@ -136,7 +250,7 @@ export async function markRecipientStatus(recipientId: string, status: ReminderR
       },
     });
 
-    const [sentCount, failedCount, activeCount] = await Promise.all([
+    const [sentCount, failedCount, activeCount, cancelledCount] = await Promise.all([
       tx.reminderCampaignRecipient.count({
         where: {
           reminderCampaignId: recipient.reminderCampaignId,
@@ -146,7 +260,7 @@ export async function markRecipientStatus(recipientId: string, status: ReminderR
       tx.reminderCampaignRecipient.count({
         where: {
           reminderCampaignId: recipient.reminderCampaignId,
-          status: { in: [ReminderRecipientStatus.FAILED, ReminderRecipientStatus.SKIPPED, ReminderRecipientStatus.CANCELLED] },
+          status: { in: [ReminderRecipientStatus.FAILED, ReminderRecipientStatus.SKIPPED] },
         },
       }),
       tx.reminderCampaignRecipient.count({
@@ -155,14 +269,27 @@ export async function markRecipientStatus(recipientId: string, status: ReminderR
           status: { in: [ReminderRecipientStatus.QUEUED, ReminderRecipientStatus.PROCESSING] },
         },
       }),
+      tx.reminderCampaignRecipient.count({
+        where: {
+          reminderCampaignId: recipient.reminderCampaignId,
+          status: ReminderRecipientStatus.CANCELLED,
+        },
+      }),
     ]);
+
+    const nextStatus =
+      activeCount === 0
+        ? cancelledCount > 0 && sentCount === 0 && failedCount === 0
+          ? ReminderCampaignStatus.CANCELLED
+          : ReminderCampaignStatus.COMPLETED
+        : ReminderCampaignStatus.RUNNING;
 
     await tx.reminderCampaign.update({
       where: { id: recipient.reminderCampaignId },
       data: {
         sentCount,
         failedCount,
-        status: activeCount === 0 ? ReminderCampaignStatus.COMPLETED : ReminderCampaignStatus.RUNNING,
+        status: nextStatus,
         completedAt: activeCount === 0 ? new Date() : null,
       },
     });

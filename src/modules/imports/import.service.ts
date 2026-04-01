@@ -1,5 +1,10 @@
+import fs from "fs/promises";
+import path from "path";
 import Papa from "papaparse";
+import { ImportJobStatus } from "@prisma/client";
 import { db } from "@/lib/db";
+import { env } from "@/lib/env";
+import { enqueueImportProcessing } from "@/queues";
 import { normalizeMalaysiaPhone } from "@/lib/phone";
 
 const planTokenRegex = /([^,]+?)\s*\{(\d+)\}/g;
@@ -55,9 +60,9 @@ export async function previewCsvImport(organizationId: string, csvContent: strin
   const seen = new Set<string>();
 
   for (const row of previewRows) {
-    if (seen.has(row.normalizedWhatsapp)) {
+    if (row.normalizedWhatsapp && seen.has(row.normalizedWhatsapp)) {
       duplicates.add(row.normalizedWhatsapp);
-    } else {
+    } else if (row.normalizedWhatsapp) {
       seen.add(row.normalizedWhatsapp);
     }
   }
@@ -69,9 +74,58 @@ export async function previewCsvImport(organizationId: string, csvContent: strin
   };
 }
 
-export async function applyCsvImport(organizationId: string, csvContent: string) {
-  const preview = await previewCsvImport(organizationId, csvContent);
+async function ensureImportDir(organizationId: string) {
+  const dir = path.join(env.UPLOAD_ROOT, "imports", organizationId);
+  await fs.mkdir(dir, { recursive: true });
+  return dir;
+}
 
+async function persistImportFile(organizationId: string, fileName: string, csvContent: string) {
+  const dir = await ensureImportDir(organizationId);
+  const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const filePath = path.join(dir, `${Date.now()}-${safeName || "import.csv"}`);
+  await fs.writeFile(filePath, csvContent, "utf8");
+  return filePath;
+}
+
+export async function createImportPreviewJob(args: {
+  organizationId: string;
+  csvContent: string;
+  originalFileName?: string;
+  createdByUserId?: string;
+}) {
+  const preview = await previewCsvImport(args.organizationId, args.csvContent);
+  const filePath = await persistImportFile(args.organizationId, args.originalFileName || "customers-import.csv", args.csvContent);
+
+  const job = await db.importJob.create({
+    data: {
+      organizationId: args.organizationId,
+      filePath,
+      originalFileName: args.originalFileName || "customers-import.csv",
+      status: ImportJobStatus.DRAFT,
+      totalRows: preview.previewRows.length,
+      successRows: 0,
+      failedRows: preview.errors.length,
+      createdByUserId: args.createdByUserId,
+      previewData: preview,
+    },
+  });
+
+  if (preview.errors.length) {
+    await db.importRowError.createMany({
+      data: preview.errors.map((error) => ({
+        organizationId: args.organizationId,
+        importJobId: job.id,
+        rowNumber: error.rowNumber,
+        message: error.message,
+      })),
+    });
+  }
+
+  return { job, preview };
+}
+
+async function applyPreviewRows(organizationId: string, preview: Awaited<ReturnType<typeof previewCsvImport>>) {
   if (preview.errors.length) {
     throw new Error(preview.errors[0]?.message || "CSV import validation failed");
   }
@@ -170,4 +224,108 @@ export async function applyCsvImport(organizationId: string, csvContent: string)
     updatedCustomers,
     assignmentsUpserted,
   };
+}
+
+export async function applyCsvImport(organizationId: string, csvContent: string) {
+  const preview = await previewCsvImport(organizationId, csvContent);
+  return applyPreviewRows(organizationId, preview);
+}
+
+export async function listImportJobs(organizationId: string) {
+  return db.importJob.findMany({
+    where: { organizationId },
+    orderBy: { createdAt: "desc" },
+    include: {
+      rowErrors: {
+        orderBy: { rowNumber: "asc" },
+        take: 10,
+      },
+    },
+  });
+}
+
+export async function enqueueImportJob(args: { organizationId: string; importJobId: string }) {
+  const job = await db.importJob.findFirstOrThrow({
+    where: {
+      id: args.importJobId,
+      organizationId: args.organizationId,
+    },
+  });
+
+  await db.importJob.update({
+    where: { id: job.id },
+    data: {
+      status: ImportJobStatus.PROCESSING,
+      successRows: 0,
+      failedRows: 0,
+    },
+  });
+
+  await enqueueImportProcessing({ importJobId: job.id });
+  return job;
+}
+
+export async function processImportJob(importJobId: string) {
+  const job = await db.importJob.findUniqueOrThrow({
+    where: { id: importJobId },
+  });
+
+  const csvContent = await fs.readFile(job.filePath, "utf8");
+  const preview = await previewCsvImport(job.organizationId, csvContent);
+
+  await db.importRowError.deleteMany({
+    where: { importJobId: job.id },
+  });
+
+  if (preview.errors.length) {
+    await db.importRowError.createMany({
+      data: preview.errors.map((error) => ({
+        organizationId: job.organizationId,
+        importJobId: job.id,
+        rowNumber: error.rowNumber,
+        message: error.message,
+      })),
+    });
+
+    await db.importJob.update({
+      where: { id: job.id },
+      data: {
+        status: ImportJobStatus.FAILED,
+        totalRows: preview.previewRows.length,
+        successRows: 0,
+        failedRows: preview.errors.length,
+        previewData: preview,
+      },
+    });
+
+    throw new Error(preview.errors[0]?.message || "Import validation failed");
+  }
+
+  try {
+    const result = await applyPreviewRows(job.organizationId, preview);
+    await db.importJob.update({
+      where: { id: job.id },
+      data: {
+        status: ImportJobStatus.COMPLETED,
+        totalRows: result.processedRows,
+        successRows: result.processedRows,
+        failedRows: 0,
+        previewData: preview,
+      },
+    });
+
+    return result;
+  } catch (error) {
+    await db.importJob.update({
+      where: { id: job.id },
+      data: {
+        status: ImportJobStatus.FAILED,
+        totalRows: preview.previewRows.length,
+        successRows: 0,
+        failedRows: preview.previewRows.length,
+        previewData: preview,
+      },
+    });
+    throw error;
+  }
 }
