@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
     headers: request.headers,
     payload,
   });
-  const providerReference = result.providerReference;
+  const providerReference = "providerReference" in result ? result.providerReference : undefined;
 
   const transaction = await db.paymentTransaction.findFirst({
     where: { provider: PaymentProvider.CHIP, providerReference: providerReference || undefined },
