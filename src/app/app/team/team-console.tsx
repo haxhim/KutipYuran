@@ -14,7 +14,6 @@ export function TeamConsole({ members }: { members: Array<{ id: string; role: st
     fullName: "",
     email: "",
     phoneNumber: "",
-    role: "USER",
   });
 
   async function inviteMember() {
@@ -31,7 +30,7 @@ export function TeamConsole({ members }: { members: Array<{ id: string; role: st
     }
     setStatusMessage(`Invited ${payload?.user?.email || form.email}.`);
     setInviteUrl(payload?.inviteUrl || "");
-    setForm({ fullName: "", email: "", phoneNumber: "", role: "USER" });
+    setForm({ fullName: "", email: "", phoneNumber: "" });
     startTransition(() => router.refresh());
   }
 
@@ -52,14 +51,10 @@ export function TeamConsole({ members }: { members: Array<{ id: string; role: st
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 md:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-3">
         <Input onChange={(event) => setForm((current) => ({ ...current, fullName: event.target.value }))} placeholder="Full name" value={form.fullName} />
         <Input onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder="Email" value={form.email} />
         <Input onChange={(event) => setForm((current) => ({ ...current, phoneNumber: event.target.value }))} placeholder="Phone number" value={form.phoneNumber} />
-        <select className="h-10 rounded-xl border bg-background px-3 text-sm" onChange={(event) => setForm((current) => ({ ...current, role: event.target.value }))} value={form.role}>
-          <option value="USER">USER</option>
-          <option value="ADMIN">ADMIN</option>
-        </select>
       </div>
       <div className="flex flex-wrap gap-3">
         <Button disabled={isPending} onClick={inviteMember} type="button">

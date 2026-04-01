@@ -30,14 +30,12 @@ export async function inviteTeamMember(args: {
   actorUserId: string;
   email: string;
   fullName: string;
-  role: MemberRole;
   phoneNumber?: string;
 }) {
   const parsed = teamInviteSchema.parse({
     email: args.email,
     fullName: args.fullName,
     phoneNumber: args.phoneNumber || "",
-    role: args.role,
   });
   const passwordHash = await hashPassword(crypto.randomUUID());
 
@@ -65,14 +63,14 @@ export async function inviteTeamMember(args: {
       },
     },
     update: {
-      role: parsed.role,
+      role: MemberRole.TENANT,
       invitedAt: new Date(),
       joinedAt: null,
     },
     create: {
       organizationId: args.organizationId,
       userId: user.id,
-      role: parsed.role,
+      role: MemberRole.TENANT,
       invitedAt: new Date(),
     },
     include: {
@@ -88,7 +86,7 @@ export async function inviteTeamMember(args: {
     entityId: membership.id,
     metadata: {
       email: parsed.email,
-      role: parsed.role,
+      role: "TENANT_USER",
     },
   });
 

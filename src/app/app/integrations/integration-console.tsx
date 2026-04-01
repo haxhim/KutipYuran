@@ -37,14 +37,24 @@ const providerFields: Record<
   ],
 };
 
-export function IntegrationConsole({ initialConfigs }: { initialConfigs: ProviderConfigItem[] }) {
+export function IntegrationConsole({
+  initialConfigs,
+  providers = ["CHIP", "TOYYIBPAY", "MANUAL"],
+  savePath = "/api/integrations",
+  testPath = "/api/integrations/test",
+}: {
+  initialConfigs: ProviderConfigItem[];
+  providers?: ProviderKey[];
+  savePath?: string;
+  testPath?: string;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [statusMessage, setStatusMessage] = useState("");
   const [testResults, setTestResults] = useState<Partial<Record<ProviderKey, string>>>({});
   const [form, setForm] = useState(() => {
     const configs = Object.fromEntries(
-      (["CHIP", "TOYYIBPAY", "MANUAL"] as ProviderKey[]).map((provider) => {
+      providers.map((provider) => {
         const existing = initialConfigs.find((item) => item.provider === provider);
         return [
           provider,
@@ -62,17 +72,17 @@ export function IntegrationConsole({ initialConfigs }: { initialConfigs: Provide
   const configMeta = useMemo(
     () =>
       Object.fromEntries(
-        (["CHIP", "TOYYIBPAY", "MANUAL"] as ProviderKey[]).map((provider) => [
+        providers.map((provider) => [
           provider,
           initialConfigs.find((item) => item.provider === provider) || null,
         ]),
       ) as Record<ProviderKey, ProviderConfigItem | null>,
-    [initialConfigs],
+    [initialConfigs, providers],
   );
 
   async function saveProvider(provider: ProviderKey) {
     setStatusMessage("");
-    const response = await fetch("/api/integrations", {
+    const response = await fetch(savePath, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -92,7 +102,7 @@ export function IntegrationConsole({ initialConfigs }: { initialConfigs: Provide
 
   async function testProvider(provider: ProviderKey) {
     setStatusMessage("");
-    const response = await fetch("/api/integrations/test", {
+    const response = await fetch(testPath, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ provider }),
@@ -107,7 +117,7 @@ export function IntegrationConsole({ initialConfigs }: { initialConfigs: Provide
 
   return (
     <div className="space-y-6">
-      {(["CHIP", "TOYYIBPAY", "MANUAL"] as ProviderKey[]).map((provider) => (
+      {providers.map((provider) => (
         <div className="rounded-2xl border bg-card p-5 shadow-sm" key={provider}>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>

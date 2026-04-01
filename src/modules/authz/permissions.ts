@@ -17,28 +17,23 @@ export const permissions = {
 
 export type PermissionKey = (typeof permissions)[keyof typeof permissions];
 
+const tenantPermissions: PermissionKey[] = [
+  permissions.manageCustomers,
+  permissions.manageBilling,
+  permissions.createCampaigns,
+  permissions.manageIntegrations,
+  permissions.viewReports,
+  permissions.manageTeam,
+  permissions.verifyManualPayments,
+  permissions.manageOrganizationSettings,
+  permissions.managePricingAndLimits,
+  permissions.manageWallet,
+  permissions.viewAuditLogs,
+  permissions.manageWhatsapp,
+];
+
 const rolePermissions: Record<MemberRole, PermissionKey[]> = {
-  ADMIN: [
-    permissions.manageCustomers,
-    permissions.manageBilling,
-    permissions.createCampaigns,
-    permissions.manageIntegrations,
-    permissions.viewReports,
-    permissions.manageTeam,
-    permissions.verifyManualPayments,
-    permissions.manageOrganizationSettings,
-    permissions.managePricingAndLimits,
-    permissions.manageWallet,
-    permissions.viewAuditLogs,
-    permissions.manageWhatsapp,
-  ],
-  USER: [
-    permissions.manageCustomers,
-    permissions.manageBilling,
-    permissions.createCampaigns,
-    permissions.viewReports,
-    permissions.manageWhatsapp,
-  ],
+  TENANT: tenantPermissions,
 };
 
 export function roleHasPermission(role: MemberRole, permission: PermissionKey) {

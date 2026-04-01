@@ -12,7 +12,7 @@ export default async function TeamPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Team / Members</h1>
-        <p className="text-muted-foreground">Current organization access list with role visibility and membership state.</p>
+        <p className="text-muted-foreground">Current organization access list for the single tenant user role and membership state.</p>
       </div>
 
       <Card>
@@ -29,7 +29,7 @@ export default async function TeamPage() {
               <tr className="border-b text-left">
                 <th className="py-3">Name</th>
                 <th>Email</th>
-                <th>Role</th>
+                <th>Access</th>
                 <th>Status</th>
                 <th>Joined</th>
               </tr>
@@ -44,7 +44,7 @@ export default async function TeamPage() {
                     </div>
                   </td>
                   <td>{member.user.email}</td>
-                  <td>{member.role}</td>
+                  <td>Tenant User</td>
                   <td>{member.user.status}</td>
                   <td>{member.joinedAt ? new Date(member.joinedAt).toLocaleString() : "Invited"}</td>
                 </tr>

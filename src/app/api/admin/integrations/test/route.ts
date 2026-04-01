@@ -1,23 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PaymentProvider } from "@prisma/client";
-import { permissions } from "@/modules/authz/permissions";
+import { getCurrentUser } from "@/lib/auth";
 import { testProviderConfig } from "@/modules/integrations/integration.service";
-import { requireTenantPermission } from "@/modules/tenant/tenant-context";
 
 export async function POST(request: NextRequest) {
-  const tenant = await requireTenantPermission(permissions.manageIntegrations);
+  const user = await getCurrentUser();
+  if (!user?.isPlatformAdmin) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const body = await request.json();
 
   try {
     const result = await testProviderConfig({
-      organizationId: tenant.organizationId,
-      provider: (body.provider || "MANUAL") as PaymentProvider,
-      scope: "ORGANIZATION",
+      provider: (body.provider || "CHIP") as PaymentProvider,
+      scope: "GLOBAL",
     });
     return NextResponse.json(result);
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to test integration config" },
+      { error: error instanceof Error ? error.message : "Failed to test global integration config" },
       { status: 400 },
     );
   }

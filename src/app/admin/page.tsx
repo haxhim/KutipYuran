@@ -1,9 +1,11 @@
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { AdminOpsConsole } from "@/app/admin/admin-ops-console";
 import { AdminPayoutConsole } from "@/app/admin/payout-console";
+import { IntegrationConsole } from "@/app/app/integrations/integration-console";
 import { getCurrentUser } from "@/lib/auth";
 import { formatCurrency } from "@/lib/utils";
 import { getAdminMonitoringSnapshot } from "@/modules/admin/admin.service";
+import { listGlobalProviderConfigs } from "@/modules/integrations/integration.service";
 
 export default async function AdminPage() {
   const user = await getCurrentUser();
@@ -12,6 +14,7 @@ export default async function AdminPage() {
   }
 
   const snapshot = await getAdminMonitoringSnapshot();
+  const globalProviderConfigs = await listGlobalProviderConfigs();
 
   return (
     <div className="space-y-6">
@@ -46,6 +49,28 @@ export default async function AdminPage() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
+        <Card>
+          <CardTitle>Gateway Provider Control</CardTitle>
+          <CardDescription className="mt-2">
+            Configure SaaS-controlled gateway credentials for the payout flow: payer to KutipYuran, then payout to tenant.
+          </CardDescription>
+          <div className="mt-4">
+            <IntegrationConsole
+              initialConfigs={globalProviderConfigs.map((config) => ({
+                id: config.id,
+                provider: config.provider,
+                isEnabled: config.isEnabled,
+                isGlobal: config.isGlobal,
+                updatedAt: config.updatedAt,
+                decryptedConfig: config.decryptedConfig,
+              }))}
+              providers={["CHIP", "TOYYIBPAY"]}
+              savePath="/api/admin/integrations"
+              testPath="/api/admin/integrations/test"
+            />
+          </div>
+        </Card>
+
         <Card>
           <CardTitle>Queue Monitoring</CardTitle>
           <CardDescription className="mt-2">BullMQ backlog and worker-facing queue states.</CardDescription>

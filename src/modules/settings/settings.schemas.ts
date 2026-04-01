@@ -1,4 +1,4 @@
-import { BillingType, MemberRole, PaymentProvider } from "@prisma/client";
+import { BillingType, PaymentProvider } from "@prisma/client";
 import { z } from "zod";
 
 export const organizationSettingsSchema = z.object({
@@ -21,7 +21,6 @@ export const teamInviteSchema = z.object({
   email: z.string().email(),
   fullName: z.string().min(2),
   phoneNumber: z.string().optional().or(z.literal("")),
-  role: z.nativeEnum(MemberRole),
 });
 
 export const inviteAcceptanceSchema = z.object({

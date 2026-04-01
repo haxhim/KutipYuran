@@ -4,6 +4,8 @@ import { db } from "@/lib/db";
 import { createAuditLog } from "@/modules/audit/audit.service";
 import { providerConfigSchema } from "@/modules/settings/settings.schemas";
 
+export type ProviderConfigScope = "ORGANIZATION" | "GLOBAL";
+
 export async function listProviderConfigs(organizationId: string) {
   const configs = await db.paymentProviderConfig.findMany({
     where: {
@@ -27,33 +29,76 @@ export async function listProviderConfigs(organizationId: string) {
   }));
 }
 
+export async function listGlobalProviderConfigs() {
+  const configs = await db.paymentProviderConfig.findMany({
+    where: {
+      organizationId: null,
+      isGlobal: true,
+    },
+    orderBy: { provider: "asc" },
+  });
+
+  return configs.map((config) => ({
+    ...config,
+    decryptedConfig: (() => {
+      try {
+        return JSON.parse(decrypt(config.encryptedConfig)) as Record<string, string>;
+      } catch {
+        return {};
+      }
+    })(),
+  }));
+}
+
 export async function upsertProviderConfig(args: {
-  organizationId: string;
+  organizationId?: string;
   actorUserId: string;
+  scope: ProviderConfigScope;
   payload: unknown;
 }) {
   const parsed = providerConfigSchema.parse(args.payload);
+  const isGlobal = args.scope === "GLOBAL";
 
-  const config = await db.paymentProviderConfig.upsert({
-    where: {
-      organizationId_provider: {
-        organizationId: args.organizationId,
-        provider: parsed.provider,
-      },
-    },
-    update: {
-      isEnabled: parsed.isEnabled,
-      encryptedConfig: encrypt(JSON.stringify(parsed.config)),
-      isGlobal: false,
-    },
-    create: {
-      organizationId: args.organizationId,
-      provider: parsed.provider,
-      isEnabled: parsed.isEnabled,
-      encryptedConfig: encrypt(JSON.stringify(parsed.config)),
-      isGlobal: false,
-    },
+  if (!isGlobal && parsed.provider !== PaymentProvider.MANUAL) {
+    throw new Error("Tenants can only manage manual payment instructions. CHIP and ToyyibPay are managed by platform admin.");
+  }
+
+  if (isGlobal && parsed.provider === PaymentProvider.MANUAL) {
+    throw new Error("Manual payment instructions must be managed by the tenant organization.");
+  }
+
+  const existing = await db.paymentProviderConfig.findFirst({
+    where: isGlobal
+      ? {
+          organizationId: null,
+          provider: parsed.provider,
+          isGlobal: true,
+        }
+      : {
+          organizationId: args.organizationId,
+          provider: parsed.provider,
+        },
   });
+
+  const config = existing
+    ? await db.paymentProviderConfig.update({
+        where: { id: existing.id },
+        data: {
+          isEnabled: parsed.isEnabled,
+          encryptedConfig: encrypt(JSON.stringify(parsed.config)),
+          isGlobal,
+          organizationId: isGlobal ? null : args.organizationId,
+        },
+      })
+    : await db.paymentProviderConfig.create({
+        data: {
+          organizationId: isGlobal ? null : args.organizationId,
+          provider: parsed.provider,
+          isEnabled: parsed.isEnabled,
+          encryptedConfig: encrypt(JSON.stringify(parsed.config)),
+          isGlobal,
+        },
+      });
 
   await createAuditLog({
     organizationId: args.organizationId,
@@ -64,6 +109,7 @@ export async function upsertProviderConfig(args: {
     metadata: {
       provider: config.provider,
       isEnabled: config.isEnabled,
+      scope: args.scope,
     },
   });
 
@@ -71,14 +117,26 @@ export async function upsertProviderConfig(args: {
 }
 
 export async function testProviderConfig(args: {
-  organizationId: string;
+  organizationId?: string;
   provider: PaymentProvider;
+  scope?: ProviderConfigScope;
 }) {
   const config = await db.paymentProviderConfig.findFirst({
     where: {
-      organizationId: args.organizationId,
       provider: args.provider,
+      ...(args.scope === "GLOBAL"
+        ? {
+            organizationId: null,
+            isGlobal: true,
+          }
+        : {
+            OR: [
+              { organizationId: args.organizationId },
+              { organizationId: null, isGlobal: true },
+            ],
+          }),
     },
+    orderBy: [{ organizationId: "desc" }, { isGlobal: "desc" }],
   });
 
   if (!config) {
