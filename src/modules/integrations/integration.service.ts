@@ -1,8 +1,9 @@
 import { PaymentProvider } from "@prisma/client";
 import { decrypt, encrypt } from "@/lib/crypto";
 import { db } from "@/lib/db";
+import { env } from "@/lib/env";
 import { createAuditLog } from "@/modules/audit/audit.service";
-import { providerConfigSchema } from "@/modules/settings/settings.schemas";
+import { gatewayToggleSchema, providerConfigSchema } from "@/modules/settings/settings.schemas";
 
 export type ProviderConfigScope = "ORGANIZATION" | "GLOBAL";
 
@@ -48,6 +49,169 @@ export async function listGlobalProviderConfigs() {
       }
     })(),
   }));
+}
+
+export function getEnvGatewayHealth() {
+  return [
+    {
+      provider: PaymentProvider.CHIP,
+      configured: Boolean(env.CHIP_BRAND_ID && env.CHIP_API_TOKEN),
+      baseUrl: env.CHIP_API_BASE_URL,
+      missingKeys: [
+        !env.CHIP_BRAND_ID ? "CHIP_BRAND_ID" : null,
+        !env.CHIP_API_TOKEN ? "CHIP_API_TOKEN" : null,
+      ].filter(Boolean) as string[],
+    },
+    {
+      provider: PaymentProvider.TOYYIBPAY,
+      configured: Boolean(env.TOYYIBPAY_CATEGORY_CODE && env.TOYYIBPAY_SECRET_KEY),
+      baseUrl: env.TOYYIBPAY_API_BASE_URL,
+      missingKeys: [
+        !env.TOYYIBPAY_CATEGORY_CODE ? "TOYYIBPAY_CATEGORY_CODE" : null,
+        !env.TOYYIBPAY_SECRET_KEY ? "TOYYIBPAY_SECRET_KEY" : null,
+      ].filter(Boolean) as string[],
+    },
+  ];
+}
+
+export async function testEnvGatewayConnection(provider: PaymentProvider) {
+  const health = getEnvGatewayHealth().find((item) => item.provider === provider);
+  if (!health) {
+    throw new Error("Unsupported provider");
+  }
+
+  if (!health.configured) {
+    return {
+      ok: false,
+      message: `Missing env configuration: ${health.missingKeys.join(", ")}`,
+    };
+  }
+
+  const targetUrl =
+    provider === PaymentProvider.CHIP
+      ? `${env.CHIP_API_BASE_URL}/purchases/not-a-real-reference`
+      : `${env.TOYYIBPAY_API_BASE_URL}/index.php/api/getBankFPX`;
+
+  try {
+    const response = await fetch(targetUrl, {
+      method: "GET",
+      headers:
+        provider === PaymentProvider.CHIP
+          ? {
+              Authorization: `Bearer ${env.CHIP_API_TOKEN}`,
+            }
+          : undefined,
+    });
+
+    return {
+      ok: response.status < 500,
+      message:
+        response.status < 500
+          ? `Connection to ${provider} endpoint succeeded with status ${response.status}.`
+          : `${provider} endpoint responded with status ${response.status}.`,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : `Failed to reach ${provider} endpoint.`,
+    };
+  }
+}
+
+export async function listTenantGatewayStatuses(organizationId: string) {
+  const [envGateways, tenantConfigs] = await Promise.all([
+    Promise.resolve(getEnvGatewayHealth()),
+    db.paymentProviderConfig.findMany({
+      where: {
+        organizationId,
+        provider: {
+          in: [PaymentProvider.CHIP, PaymentProvider.TOYYIBPAY],
+        },
+      },
+      orderBy: { provider: "asc" },
+    }),
+  ]);
+
+  return envGateways.map((gateway) => {
+    const tenantConfig = tenantConfigs.find((config) => config.provider === gateway.provider);
+    return {
+      provider: gateway.provider,
+      platformReady: gateway.configured,
+      isEnabledForOrganization: tenantConfig?.isEnabled ?? false,
+      updatedAt: tenantConfig?.updatedAt ?? null,
+      baseUrl: gateway.baseUrl,
+      missingKeys: gateway.missingKeys,
+    };
+  });
+}
+
+export async function updateTenantGatewayToggle(args: {
+  organizationId: string;
+  actorUserId: string;
+  payload: unknown;
+}) {
+  const parsed = gatewayToggleSchema.parse(args.payload);
+  const gatewayHealth = getEnvGatewayHealth().find((item) => item.provider === parsed.provider);
+
+  if (parsed.isEnabled && !gatewayHealth?.configured) {
+    throw new Error(`${parsed.provider} is not configured by platform admin yet.`);
+  }
+
+  const existing = await db.paymentProviderConfig.findFirst({
+    where: {
+      organizationId: args.organizationId,
+      provider: parsed.provider,
+    },
+  });
+
+  const config = existing
+    ? await db.paymentProviderConfig.update({
+        where: { id: existing.id },
+        data: {
+          isEnabled: parsed.isEnabled,
+          encryptedConfig: existing.encryptedConfig || encrypt(JSON.stringify({})),
+          isGlobal: false,
+        },
+      })
+    : await db.paymentProviderConfig.create({
+        data: {
+          organizationId: args.organizationId,
+          provider: parsed.provider,
+          isEnabled: parsed.isEnabled,
+          encryptedConfig: encrypt(JSON.stringify({})),
+          isGlobal: false,
+        },
+      });
+
+  await createAuditLog({
+    organizationId: args.organizationId,
+    userId: args.actorUserId,
+    action: "gateway_provider.toggle_updated",
+    entityType: "PaymentProviderConfig",
+    entityId: config.id,
+    metadata: {
+      provider: parsed.provider,
+      isEnabled: parsed.isEnabled,
+    },
+  });
+
+  return config;
+}
+
+export async function ensureGatewayAvailableForOrganization(organizationId: string, provider: PaymentProvider) {
+  if (provider === PaymentProvider.MANUAL) {
+    return;
+  }
+
+  const gateway = (await listTenantGatewayStatuses(organizationId)).find((item) => item.provider === provider);
+
+  if (!gateway?.platformReady) {
+    throw new Error(`${provider} is not configured by platform admin.`);
+  }
+
+  if (!gateway.isEnabledForOrganization) {
+    throw new Error(`${provider} is disabled for this organization.`);
+  }
 }
 
 export async function upsertProviderConfig(args: {

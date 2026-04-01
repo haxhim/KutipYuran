@@ -81,3 +81,8 @@ export const providerConfigSchema = z.object({
     }
   }
 });
+
+export const gatewayToggleSchema = z.object({
+  provider: z.enum([PaymentProvider.CHIP, PaymentProvider.TOYYIBPAY]),
+  isEnabled: z.boolean(),
+});

@@ -1,5 +1,6 @@
 import { PaymentProvider, PaymentTransactionStatus, Prisma, WebhookStatus } from "@prisma/client";
 import { db } from "@/lib/db";
+import { ensureGatewayAvailableForOrganization } from "@/modules/integrations/integration.service";
 import { getPaymentProvider } from "@/modules/payments/payment.factory";
 import { markGatewayPaymentPaid, recordGatewayPaymentPending } from "@/modules/wallet/wallet.service";
 import type { WebhookProcessResult } from "@/types";
@@ -9,6 +10,8 @@ export async function createBillingPaymentLink(args: {
   billingRecordId: string;
   provider: PaymentProvider;
 }) {
+  await ensureGatewayAvailableForOrganization(args.organizationId, args.provider);
+
   const billingRecord = await db.billingRecord.findFirstOrThrow({
     where: { id: args.billingRecordId, organizationId: args.organizationId },
     include: { customer: true, organization: true },

@@ -1,36 +1,33 @@
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
-import { IntegrationConsole } from "@/app/app/integrations/integration-console";
-import { listGlobalProviderConfigs } from "@/modules/integrations/integration.service";
+import { GatewayHealthConsole } from "@/app/admin/gateways/gateway-health-console";
+import { getEnvGatewayHealth } from "@/modules/integrations/integration.service";
 
 export default async function AdminGatewaysPage() {
-  const globalProviderConfigs = await listGlobalProviderConfigs();
+  const envGateways = getEnvGatewayHealth();
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Gateway Configuration</h1>
-        <p className="text-muted-foreground">Platform-owned gateway credentials for the aggregator collection and payout model.</p>
+        <p className="text-muted-foreground">Read-only platform gateway health from env, plus live connectivity testing.</p>
       </div>
 
       <Card>
         <CardTitle>Collection Providers</CardTitle>
         <CardDescription className="mt-2">
-          Configure CHIP and ToyyibPay at the SaaS level. Tenants only inherit collection availability and request payout later.
+          Gateway credentials live in env. Tenants can only enable or disable use of the platform-managed providers for their own organization.
         </CardDescription>
-        <div className="mt-4">
-          <IntegrationConsole
-            initialConfigs={globalProviderConfigs.map((config) => ({
-              id: config.id,
-              provider: config.provider,
-              isEnabled: config.isEnabled,
-              isGlobal: config.isGlobal,
-              updatedAt: config.updatedAt,
-              decryptedConfig: config.decryptedConfig,
-            }))}
-            providers={["CHIP", "TOYYIBPAY"]}
-            savePath="/api/admin/integrations"
-            testPath="/api/admin/integrations/test"
-          />
+        <div className="mt-4 space-y-4">
+          {envGateways.map((gateway) => (
+            <div className="rounded-2xl border bg-card p-5 shadow-sm" key={gateway.provider}>
+              <p className="text-lg font-semibold">{gateway.provider}</p>
+              <p className="mt-1 text-sm text-muted-foreground">Endpoint: {gateway.baseUrl}</p>
+              <p className="mt-2 text-sm">
+                Env status: {gateway.configured ? "Configured" : `Missing ${gateway.missingKeys.join(", ")}`}
+              </p>
+            </div>
+          ))}
+          <GatewayHealthConsole providers={envGateways.map((gateway) => ({ provider: gateway.provider as "CHIP" | "TOYYIBPAY" }))} />
         </div>
       </Card>
     </div>

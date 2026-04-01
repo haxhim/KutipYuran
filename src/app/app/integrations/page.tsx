@@ -1,14 +1,16 @@
 import { Card, CardTitle } from "@/components/ui/card";
+import { GatewayToggleConsole } from "@/app/app/integrations/gateway-toggle-console";
 import { IntegrationConsole } from "@/app/app/integrations/integration-console";
 import { permissions } from "@/modules/authz/permissions";
 import { getOrganizationSettings } from "@/modules/settings/settings.service";
-import { listProviderConfigs } from "@/modules/integrations/integration.service";
+import { listProviderConfigs, listTenantGatewayStatuses } from "@/modules/integrations/integration.service";
 import { requireTenantPermission } from "@/modules/tenant/tenant-context";
 
 export default async function IntegrationsPage() {
   const tenant = await requireTenantPermission(permissions.manageIntegrations);
   const organization = await getOrganizationSettings(tenant.organizationId);
   const providerConfigs = await listProviderConfigs(tenant.organizationId);
+  const gatewayStatuses = await listTenantGatewayStatuses(tenant.organizationId);
 
   return (
     <div className="space-y-6">
@@ -36,21 +38,16 @@ export default async function IntegrationsPage() {
                 then approved balances move back to your organization through payout requests.
               </p>
             </div>
-            {providerConfigs
-              .filter((config) => config.provider !== "MANUAL")
-              .map((config) => (
-                <div key={config.id} className="rounded-xl bg-muted p-4">
-                  <p className="font-medium">{config.provider}</p>
-                  <p>Status: {config.isEnabled ? "Enabled by platform admin" : "Not enabled yet"}</p>
-                  <p>Scope: {config.isGlobal ? "Platform-managed" : "Organization override"}</p>
-                  <p>Updated: {new Date(config.updatedAt).toLocaleString()}</p>
-                </div>
-              ))}
-            {!providerConfigs.some((config) => config.provider !== "MANUAL") ? (
-              <div className="rounded-xl bg-muted p-4 text-muted-foreground">
-                No gateway provider has been activated by platform admin yet.
-              </div>
-            ) : null}
+            <GatewayToggleConsole
+              gateways={gatewayStatuses.map((gateway) => ({
+                provider: gateway.provider as "CHIP" | "TOYYIBPAY",
+                platformReady: gateway.platformReady,
+                isEnabledForOrganization: gateway.isEnabledForOrganization,
+                updatedAt: gateway.updatedAt,
+                baseUrl: gateway.baseUrl,
+                missingKeys: gateway.missingKeys,
+              }))}
+            />
           </div>
         </Card>
       </div>
