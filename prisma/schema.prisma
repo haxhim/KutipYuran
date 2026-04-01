@@ -213,6 +213,7 @@ model Organization {
   importJobs            ImportJob[]
   importRowErrors       ImportRowError[]
   paymentTransactions   PaymentTransaction[]
+  manualPaymentProofs   ManualPaymentProof[]
   paymentProviderConfig PaymentProviderConfig[]
   whatsappSessions      WhatsAppSession[]
   whatsappLogs          WhatsAppConnectionLog[]

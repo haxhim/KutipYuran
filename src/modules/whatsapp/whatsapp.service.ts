@@ -52,6 +52,7 @@ export async function getOrCreateWhatsappClient(sessionKey: string, sessionId: s
       dataPath: env.WHATSAPP_SESSION_ROOT,
     }),
     puppeteer: {
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
     },
   });
