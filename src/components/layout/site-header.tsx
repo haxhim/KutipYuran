@@ -1,5 +1,8 @@
 import type { Route } from "next";
 import Link from "next/link";
+import { getCurrentUser } from "@/lib/auth";
+import { getSignedInHome } from "@/lib/auth-redirects";
+import { SignOutButton } from "@/components/auth/sign-out-button";
 import { Button } from "@/components/ui/button";
 
 const navItems: ReadonlyArray<{ href: Route; label: string }> = [
@@ -9,7 +12,10 @@ const navItems: ReadonlyArray<{ href: Route; label: string }> = [
   { href: "/contact", label: "Contact" },
 ];
 
-export function SiteHeader() {
+export async function SiteHeader() {
+  const user = await getCurrentUser();
+  const signedInHome = user ? getSignedInHome(user) : null;
+
   return (
     <header className="border-b bg-background/80 backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
@@ -24,12 +30,23 @@ export function SiteHeader() {
           ))}
         </nav>
         <div className="flex gap-3">
-          <Button asChild variant="ghost">
-            <Link href="/login">Login</Link>
-          </Button>
-          <Button asChild>
-            <Link href="/register">Start Free</Link>
-          </Button>
+          {user && signedInHome ? (
+            <>
+              <Button asChild variant="ghost">
+                <Link href={signedInHome}>Dashboard</Link>
+              </Button>
+              <SignOutButton variant="outline" />
+            </>
+          ) : (
+            <>
+              <Button asChild variant="ghost">
+                <Link href="/login">Login</Link>
+              </Button>
+              <Button asChild>
+                <Link href="/register">Start Free</Link>
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </header>

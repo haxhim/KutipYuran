@@ -1,6 +1,6 @@
 import type { Route } from "next";
-import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
+import { AuthenticatedShell } from "@/components/layout/authenticated-shell";
 import { db } from "@/lib/db";
 import { hasPermission } from "@/lib/rbac";
 import { permissions, type PermissionKey } from "@/modules/authz/permissions";
@@ -47,28 +47,14 @@ export async function DashboardShell({ children }: { children: React.ReactNode }
   });
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="grid min-h-screen md:grid-cols-[260px_1fr]">
-        <aside className="border-r bg-card px-4 py-6">
-          <div className="mb-8 px-2">
-            <p className="text-sm text-muted-foreground">Signed in as</p>
-            <p className="font-semibold">{user?.fullName || "Guest"}</p>
-          </div>
-          <nav className="space-y-1">
-            {visibleNav.map((item) => (
-              <Link key={item.href} href={item.href} className="block rounded-xl px-3 py-2 text-sm hover:bg-muted">
-                {item.label}
-              </Link>
-            ))}
-            {user?.isPlatformAdmin ? (
-              <Link href="/admin" className="block rounded-xl px-3 py-2 text-sm hover:bg-muted">
-                Superadmin
-              </Link>
-            ) : null}
-          </nav>
-        </aside>
-        <main className="p-6">{children}</main>
-      </div>
-    </div>
+    <AuthenticatedShell
+      footerLink={user?.isPlatformAdmin ? { label: "Open Superadmin", href: "/admin" } : undefined}
+      nav={visibleNav.map((item) => ({ label: item.label, href: item.href }))}
+      roleLabel="Tenant User"
+      userEmail={user?.email}
+      userName={user?.fullName || "Guest"}
+    >
+      {children}
+    </AuthenticatedShell>
   );
 }

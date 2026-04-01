@@ -3,12 +3,17 @@ import { SiteHeader } from "@/components/layout/site-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { getCurrentUser } from "@/lib/auth";
+import { redirectIfSignedIn } from "@/lib/auth-redirects";
 
 export default async function LoginPage({
   searchParams,
 }: {
   searchParams: Promise<{ error?: string; email?: string }>;
 }) {
+  const user = await getCurrentUser();
+  redirectIfSignedIn(user);
+
   const params = await searchParams;
   const email = params.email || "";
   const hasInvalidCredentials = params.error === "invalid_credentials";

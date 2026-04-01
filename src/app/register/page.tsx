@@ -3,8 +3,13 @@ import { SiteHeader } from "@/components/layout/site-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { getCurrentUser } from "@/lib/auth";
+import { redirectIfSignedIn } from "@/lib/auth-redirects";
 
-export default function RegisterPage() {
+export default async function RegisterPage() {
+  const user = await getCurrentUser();
+  redirectIfSignedIn(user);
+
   return (
     <div>
       <SiteHeader />
@@ -24,4 +29,3 @@ export default function RegisterPage() {
     </div>
   );
 }
-

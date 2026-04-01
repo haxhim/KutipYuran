@@ -2,10 +2,16 @@
 
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { createSession } from "@/lib/auth";
+import { createSession, getCurrentUser } from "@/lib/auth";
+import { getSignedInHome } from "@/lib/auth-redirects";
 import { authenticateUser } from "@/modules/auth/auth.service";
 
 export async function loginAction(formData: FormData) {
+  const existingUser = await getCurrentUser();
+  if (existingUser) {
+    redirect(getSignedInHome(existingUser));
+  }
+
   const email = String(formData.get("email") || "").trim();
   const password = String(formData.get("password") || "");
   const user = await authenticateUser(email, password);

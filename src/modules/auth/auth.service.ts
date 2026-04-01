@@ -59,6 +59,7 @@ export async function authenticateUser(email: string, password: string) {
   });
 
   if (!user) return null;
+  if (user.status !== UserStatus.ACTIVE) return null;
 
   const isValid = await verifyPassword(password, user.passwordHash);
   if (!isValid) return null;

@@ -1,6 +1,8 @@
 import { SiteHeader } from "@/components/layout/site-header";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { AcceptInviteConsole } from "@/app/accept-invite/accept-invite-console";
+import { getCurrentUser } from "@/lib/auth";
+import { redirectIfSignedIn } from "@/lib/auth-redirects";
 import { verifyInviteToken } from "@/modules/invitations/invitation.service";
 
 export default async function AcceptInvitePage({
@@ -8,6 +10,9 @@ export default async function AcceptInvitePage({
 }: {
   searchParams: Promise<{ token?: string }>;
 }) {
+  const user = await getCurrentUser();
+  redirectIfSignedIn(user);
+
   const params = await searchParams;
   const token = params.token || "";
 
