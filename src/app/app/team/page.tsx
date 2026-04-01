@@ -1,4 +1,5 @@
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { TeamConsole } from "@/app/app/team/team-console";
 import { permissions } from "@/modules/authz/permissions";
 import { requireTenantPermission } from "@/modules/tenant/tenant-context";
 import { listTeamMembers } from "@/modules/team/team.service";
@@ -17,8 +18,11 @@ export default async function TeamPage() {
       <Card>
         <CardTitle>Members</CardTitle>
         <CardDescription className="mt-2">
-          Invitation and removal actions are the next step, but the access register is now visible for admins.
+          Invite staff and remove members directly from this screen.
         </CardDescription>
+        <div className="mt-4">
+          <TeamConsole members={members.map((member) => ({ id: member.id, role: member.role, email: member.user.email }))} />
+        </div>
         <div className="mt-4 overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead>

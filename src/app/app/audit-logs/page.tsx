@@ -1,11 +1,17 @@
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { AuditFilterBar } from "@/app/app/audit-logs/audit-filter-bar";
 import { permissions } from "@/modules/authz/permissions";
 import { listAuditLogs } from "@/modules/audit/audit.service";
 import { requireTenantPermission } from "@/modules/tenant/tenant-context";
 
-export default async function AuditLogsPage() {
+export default async function AuditLogsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ action?: string; entityType?: string; actor?: string; query?: string }>;
+}) {
   const tenant = await requireTenantPermission(permissions.viewAuditLogs);
-  const logs = await listAuditLogs(tenant.organizationId, { limit: 100 });
+  const filters = await searchParams;
+  const logs = await listAuditLogs(tenant.organizationId, { ...filters, limit: 100 });
 
   return (
     <div className="space-y-6">
@@ -17,8 +23,11 @@ export default async function AuditLogsPage() {
       <Card>
         <CardTitle>Recent activity</CardTitle>
         <CardDescription className="mt-2">
-          This is the foundation view for auditability. Filtering by action, entity, and actor can be layered on next.
+          Filter by action, entity, actor, or free-text query across the tenant audit trail.
         </CardDescription>
+        <div className="mt-4">
+          <AuditFilterBar />
+        </div>
         <div className="mt-4 overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead>
@@ -35,7 +44,7 @@ export default async function AuditLogsPage() {
                 logs.map((log) => (
                   <tr key={log.id} className="border-b align-top">
                     <td className="py-3">{new Date(log.createdAt).toLocaleString()}</td>
-                    <td>{log.user?.fullName || log.actorType}</td>
+                    <td>{("user" in log ? log.user?.fullName : null) || log.actorType}</td>
                     <td>{log.action}</td>
                     <td>
                       {log.entityType}

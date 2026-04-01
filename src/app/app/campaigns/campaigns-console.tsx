@@ -148,6 +148,11 @@ export function CampaignsConsole({
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                   <div className="space-y-1 text-sm">
                     <p className="font-medium">{campaign.name}</p>
+                    <p>
+                      <a className="text-primary" href={`/app/campaigns/${campaign.id}`}>
+                        Open live detail view
+                      </a>
+                    </p>
                     <p className="text-muted-foreground">Created: {new Date(campaign.createdAt).toLocaleString()}</p>
                     <p>
                       Recipients: {campaign.totalRecipients} | Sent: {campaign.sentCount} | Failed: {campaign.failedCount}

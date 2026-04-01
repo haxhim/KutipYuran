@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { Card, CardTitle } from "@/components/ui/card";
 import { db } from "@/lib/db";
 import { formatCurrency } from "@/lib/utils";
+import { ManualProofUpload } from "@/app/pay/manual/[billingId]/manual-proof-upload";
 
 export default async function ManualPaymentPage({ params }: { params: Promise<{ billingId: string }> }) {
   const { billingId } = await params;
@@ -20,10 +21,10 @@ export default async function ManualPaymentPage({ params }: { params: Promise<{ 
           <p>Organization: {billing.organization.name}</p>
           <p>Reference: {billing.referenceNo}</p>
           <p>Amount: {formatCurrency(billing.totalAmount.toString())}</p>
-          <p>Upload proof via future payer portal API or staff verification workflow.</p>
+          <p>Upload your bank transfer or QR payment proof below. Staff will review and verify it in the payment record screen.</p>
+          <ManualProofUpload billingId={billing.id} />
         </div>
       </Card>
     </main>
   );
 }
-

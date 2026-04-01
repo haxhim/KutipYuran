@@ -23,12 +23,25 @@ export async function createAuditLog(input: {
   });
 }
 
-export async function listAuditLogs(organizationId: string, args?: { action?: string; entityType?: string; limit?: number }) {
+export async function listAuditLogs(
+  organizationId: string,
+  args?: { action?: string; entityType?: string; actor?: string; limit?: number; query?: string },
+) {
   return db.auditLog.findMany({
     where: {
       organizationId,
       action: args?.action || undefined,
       entityType: args?.entityType || undefined,
+      actorType: args?.actor ? (args.actor as AuditActorType) : undefined,
+      OR: args?.query
+        ? [
+            { action: { contains: args.query, mode: "insensitive" } },
+            { entityType: { contains: args.query, mode: "insensitive" } },
+            { entityId: { contains: args.query, mode: "insensitive" } },
+            { user: { fullName: { contains: args.query, mode: "insensitive" } } },
+            { user: { email: { contains: args.query, mode: "insensitive" } } },
+          ]
+        : undefined,
     },
     orderBy: { createdAt: "desc" },
     take: args?.limit || 100,

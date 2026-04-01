@@ -9,6 +9,15 @@ import { sendWhatsappMessage } from "@/modules/whatsapp/whatsapp.service";
 import { generateBillingForCustomer } from "@/modules/billing/billing.service";
 import { processImportJob } from "@/modules/imports/import.service";
 
+async function writeWorkerHeartbeat() {
+  await redis.set("worker:heartbeat", new Date().toISOString(), "EX", 120);
+}
+
+void writeWorkerHeartbeat();
+setInterval(() => {
+  void writeWorkerHeartbeat();
+}, 30000);
+
 new Worker(
   queueNames.whatsappSend,
   async (job) => {
