@@ -54,6 +54,8 @@ RUN npm run worker:build
 FROM node:20-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+ENV HOSTNAME=0.0.0.0
+ENV PORT=3000
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 RUN apt-get update && apt-get install -y \
   openssl \
