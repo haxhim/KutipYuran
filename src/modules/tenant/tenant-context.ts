@@ -8,14 +8,14 @@ export async function requireTenantContext(slug?: string) {
     throw new Error("Unauthorized");
   }
 
-  let organizationId = user.memberships[0]?.organizationId;
+  let organizationId: string | null = user.memberships[0]?.organizationId ?? null;
 
   if (slug) {
     const organization = await db.organization.findUnique({
       where: { slug },
       select: { id: true },
     });
-    organizationId = organization?.id;
+    organizationId = organization?.id ?? null;
   }
 
   if (!organizationId) {
@@ -34,4 +34,3 @@ export async function requireTenantContext(slug?: string) {
     role: membership?.role,
   };
 }
-

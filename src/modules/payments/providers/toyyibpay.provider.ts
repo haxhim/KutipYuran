@@ -1,11 +1,12 @@
 import { PaymentProvider } from "@prisma/client";
 import { env } from "@/lib/env";
 import type { PaymentProviderAdapter } from "@/modules/payments/payment-provider";
+import type { WebhookProcessResult } from "@/types";
 
 export class ToyyibPayPaymentProvider implements PaymentProviderAdapter {
-  provider = PaymentProvider.TOYYIBPAY as const;
+  provider = PaymentProvider.TOYYIBPAY;
 
-  async createPaymentLink({ organization, billingRecord, transaction }) {
+  async createPaymentLink({ organization, billingRecord, transaction }: Parameters<PaymentProviderAdapter["createPaymentLink"]>[0]) {
     const formData = new URLSearchParams({
       userSecretKey: env.TOYYIBPAY_SECRET_KEY,
       categoryCode: env.TOYYIBPAY_CATEGORY_CODE,
@@ -45,17 +46,18 @@ export class ToyyibPayPaymentProvider implements PaymentProviderAdapter {
     };
   }
 
-  async verifyPayment({ providerReference }) {
+  async verifyPayment({ providerReference }: Parameters<PaymentProviderAdapter["verifyPayment"]>[0]): Promise<WebhookProcessResult> {
+    const status: WebhookProcessResult["status"] = providerReference ? "paid" : "failed";
     return {
       success: Boolean(providerReference),
-      status: providerReference ? "paid" : "failed",
+      status,
       providerReference,
     };
   }
 
-  async handleWebhook({ payload }) {
+  async handleWebhook({ payload }: Parameters<PaymentProviderAdapter["handleWebhook"]>[0]): Promise<WebhookProcessResult> {
     const body = payload as Record<string, string>;
-    const status = body.status_id === "1" ? "paid" : "failed";
+    const status: WebhookProcessResult["status"] = body.status_id === "1" ? "paid" : "failed";
     return {
       success: true,
       status,
@@ -64,8 +66,7 @@ export class ToyyibPayPaymentProvider implements PaymentProviderAdapter {
     };
   }
 
-  async getTransactionStatus({ transaction }) {
+  async getTransactionStatus({ transaction }: Parameters<PaymentProviderAdapter["getTransactionStatus"]>[0]) {
     return this.verifyPayment({ providerReference: transaction.providerReference || undefined, transaction });
   }
 }
-

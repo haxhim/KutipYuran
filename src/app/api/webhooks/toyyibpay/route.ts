@@ -11,16 +11,17 @@ export async function POST(request: NextRequest) {
     headers: request.headers,
     payload,
   });
+  const providerReference = result.providerReference;
 
   const transaction = await db.paymentTransaction.findFirst({
-    where: { provider: PaymentProvider.TOYYIBPAY, providerReference: result.providerReference || undefined },
+    where: { provider: PaymentProvider.TOYYIBPAY, providerReference: providerReference || undefined },
   });
 
   await db.webhookEvent.create({
     data: {
       organizationId: transaction?.organizationId,
       provider: PaymentProvider.TOYYIBPAY,
-      externalEventId: result.providerReference,
+      externalEventId: providerReference,
       eventType: "toyyibpay.webhook",
       requestHeaders: Object.fromEntries(request.headers.entries()),
       payload,

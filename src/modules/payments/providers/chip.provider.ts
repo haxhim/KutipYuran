@@ -1,11 +1,12 @@
 import { PaymentProvider } from "@prisma/client";
 import { env } from "@/lib/env";
 import type { PaymentProviderAdapter } from "@/modules/payments/payment-provider";
+import type { WebhookProcessResult } from "@/types";
 
 export class ChipPaymentProvider implements PaymentProviderAdapter {
-  provider = PaymentProvider.CHIP as const;
+  provider = PaymentProvider.CHIP;
 
-  async createPaymentLink({ organization, billingRecord, transaction }) {
+  async createPaymentLink({ organization, billingRecord, transaction }: Parameters<PaymentProviderAdapter["createPaymentLink"]>[0]) {
     const payload = {
       brand_id: env.CHIP_BRAND_ID,
       client: {
@@ -49,7 +50,7 @@ export class ChipPaymentProvider implements PaymentProviderAdapter {
     };
   }
 
-  async verifyPayment({ providerReference }) {
+  async verifyPayment({ providerReference }: Parameters<PaymentProviderAdapter["verifyPayment"]>[0]): Promise<WebhookProcessResult> {
     if (!providerReference) {
       return { success: false, status: "failed" };
     }
@@ -65,23 +66,23 @@ export class ChipPaymentProvider implements PaymentProviderAdapter {
       return { success: false, status: "failed", raw };
     }
 
-    const status = raw.paid ? "paid" : raw.status === "pending" ? "pending" : "failed";
+    const status: WebhookProcessResult["status"] = raw.paid ? "paid" : raw.status === "pending" ? "pending" : "failed";
     return { success: true, status, providerReference, raw };
   }
 
-  async handleWebhook({ payload }) {
+  async handleWebhook({ payload }: Parameters<PaymentProviderAdapter["handleWebhook"]>[0]): Promise<WebhookProcessResult> {
     const body = payload as Record<string, unknown>;
     const purchase = body?.purchase as Record<string, unknown> | undefined;
+    const status: WebhookProcessResult["status"] = purchase?.paid ? "paid" : "pending";
     return {
       success: true,
-      status: purchase?.paid ? "paid" : "pending",
+      status,
       providerReference: String(purchase?.id || ""),
       raw: payload,
     };
   }
 
-  async getTransactionStatus({ transaction }) {
+  async getTransactionStatus({ transaction }: Parameters<PaymentProviderAdapter["getTransactionStatus"]>[0]) {
     return this.verifyPayment({ providerReference: transaction.providerReference || undefined, transaction });
   }
 }
-
