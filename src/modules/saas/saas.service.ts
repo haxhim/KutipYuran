@@ -457,42 +457,46 @@ export async function reconcileRegistrationCheckout(checkoutId: string) {
     return checkout;
   }
 
-  if (checkout.provider === PaymentProvider.CHIP) {
-    const response = await fetch(`${env.CHIP_API_BASE_URL}/purchases/${checkout.providerReference}`, {
-      headers: {
-        Authorization: `Bearer ${env.CHIP_API_TOKEN}`,
-      },
-    });
-    const raw = await parseGatewayJsonResponse(response, "Payment gateway returned an invalid response");
-
-    if (response.ok && raw?.paid) {
-      await completeRegistrationCheckout({
-        provider: checkout.provider,
-        providerReference: checkout.providerReference,
+  try {
+    if (checkout.provider === PaymentProvider.CHIP) {
+      const response = await fetch(`${env.CHIP_API_BASE_URL}/purchases/${checkout.providerReference}`, {
+        headers: {
+          Authorization: `Bearer ${env.CHIP_API_TOKEN}`,
+        },
       });
+      const raw = await parseGatewayJsonResponse(response, "Payment gateway returned an invalid response");
+
+      if (response.ok && raw?.paid) {
+        await completeRegistrationCheckout({
+          provider: checkout.provider,
+          providerReference: checkout.providerReference,
+        });
+      }
     }
-  }
 
-  if (checkout.provider === PaymentProvider.TOYYIBPAY) {
-    const response = await fetch(`${env.TOYYIBPAY_API_BASE_URL}/index.php/api/getBillTransactions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({
-        billCode: checkout.providerReference,
-        billpaymentStatus: "1",
-      }).toString(),
-    });
-    const raw = await parseGatewayJsonResponse(response, "Payment gateway returned an invalid response");
-    const paid = Array.isArray(raw) && raw.length > 0 && raw[0]?.billpaymentStatus === "1";
-
-    if (response.ok && paid) {
-      await completeRegistrationCheckout({
-        provider: checkout.provider,
-        providerReference: checkout.providerReference,
+    if (checkout.provider === PaymentProvider.TOYYIBPAY) {
+      const response = await fetch(`${env.TOYYIBPAY_API_BASE_URL}/index.php/api/getBillTransactions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          billCode: checkout.providerReference,
+          billpaymentStatus: "1",
+        }).toString(),
       });
+      const raw = await parseGatewayJsonResponse(response, "Payment gateway returned an invalid response");
+      const paid = Array.isArray(raw) && raw.length > 0 && raw[0]?.billpaymentStatus === "1";
+
+      if (response.ok && paid) {
+        await completeRegistrationCheckout({
+          provider: checkout.provider,
+          providerReference: checkout.providerReference,
+        });
+      }
     }
+  } catch {
+    return checkout;
   }
 
   return db.saaSSubscriptionCheckout.findUnique({
