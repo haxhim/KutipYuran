@@ -42,7 +42,7 @@ Production-minded MVP SaaS for Malaysian fee collection automation with WhatsApp
 
 1. Copy `.env.example` to `.env` and update secrets.
 2. Run `docker compose up --build`.
-3. The app and worker containers now run `npx prisma migrate deploy` automatically before startup.
+3. The app and worker containers now run a startup schema bootstrap automatically before startup.
 4. Seed once after the first successful boot:
 
 ```bash
