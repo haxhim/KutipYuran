@@ -42,10 +42,10 @@ Production-minded MVP SaaS for Malaysian fee collection automation with WhatsApp
 
 1. Copy `.env.example` to `.env` and update secrets.
 2. Run `docker compose up --build`.
-3. Run migrations inside the app container:
+3. The app and worker containers now run `npx prisma migrate deploy` automatically before startup.
+4. Seed once after the first successful boot:
 
 ```bash
-docker compose exec app npx prisma migrate deploy
 docker compose exec app npm run db:seed
 ```
 
@@ -59,5 +59,5 @@ docker compose exec app npm run db:seed
 - Mount persistent volumes for `/app/storage` and `/app/uploads`.
 - Ensure public `APP_URL` is set to your deployed domain.
 - Use Dokploy environment injection for CHIP and ToyyibPay secrets.
-- Run `npx prisma migrate deploy` as a release or post-deploy command.
+- Rebuild and redeploy both app and worker whenever new Prisma migrations are added.
 - Keep app and worker services sharing the same storage volume for WhatsApp session persistence.

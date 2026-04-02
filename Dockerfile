@@ -105,5 +105,6 @@ COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/storage ./storage
 COPY --from=builder /app/uploads ./uploads
+COPY --from=builder /app/scripts/start-app.sh ./scripts/start-app.sh
 EXPOSE 3000
-CMD ["node", "server.js"]
+CMD ["sh", "./scripts/start-app.sh"]
