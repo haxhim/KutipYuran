@@ -15,9 +15,6 @@
     "worker:start": "node dist/worker/worker/index.js",
     "worker:build": "tsc -p worker/tsconfig.json && tsc-alias -p worker/tsconfig.json"
   },
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
-  },
   "dependencies": {
     "@prisma/client": "^6.6.0",
     "@radix-ui/react-dialog": "^1.1.1",

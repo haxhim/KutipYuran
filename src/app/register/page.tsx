@@ -5,7 +5,7 @@ import { Card, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { getCurrentUser } from "@/lib/auth";
 import { redirectIfSignedIn } from "@/lib/auth-redirects";
-import { listPublicPricingPlans } from "@/modules/saas/saas.service";
+import { listAvailableSaaSCheckoutProviders, listPublicPricingPlans } from "@/modules/saas/saas.service";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +17,7 @@ export default async function RegisterPage({
   const user = await getCurrentUser();
   redirectIfSignedIn(user);
   const plans = await listPublicPricingPlans();
+  const gateways = listAvailableSaaSCheckoutProviders();
   const params = searchParams ? await searchParams : undefined;
   const error = params?.error;
 
@@ -38,6 +39,14 @@ export default async function RegisterPage({
               {plans.map((plan) => (
                 <option key={plan.id} value={plan.id}>
                   {plan.name} - RM{Number(plan.priceAmount || plan.priceMonthly).toFixed(2)} / {plan.billingInterval === "YEARLY" ? "year" : "month"}
+                </option>
+              ))}
+            </select>
+            <select className="h-10 rounded-xl border bg-background px-3 text-sm" defaultValue={gateways[0]?.provider || ""} name="provider" required>
+              <option value="">Select a payment gateway</option>
+              {gateways.map((gateway) => (
+                <option key={gateway.provider} value={gateway.provider}>
+                  {gateway.label}
                 </option>
               ))}
             </select>

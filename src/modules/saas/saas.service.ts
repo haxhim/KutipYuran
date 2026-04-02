@@ -4,6 +4,13 @@ import { env } from "@/lib/env";
 import { createAuditLog } from "@/modules/audit/audit.service";
 import { createOrganizationSlug } from "@/lib/ids";
 import { hashPassword } from "@/lib/auth";
+import { parseGatewayJsonResponse, readGatewayErrorMessage } from "@/modules/payments/gateway-http";
+
+const saasGatewayLabels: Record<PaymentProvider, string> = {
+  [PaymentProvider.CHIP]: "CHIP",
+  [PaymentProvider.TOYYIBPAY]: "ToyyibPay",
+  [PaymentProvider.MANUAL]: "Manual",
+};
 
 function getPlanPrice(plan: { priceAmount: { toString(): string } | number; priceMonthly: { toString(): string } | number }) {
   const priceAmount = Number(typeof plan.priceAmount === "number" ? plan.priceAmount : plan.priceAmount.toString());
@@ -14,27 +21,36 @@ function getPlanPrice(plan: { priceAmount: { toString(): string } | number; pric
   return Number(typeof plan.priceMonthly === "number" ? plan.priceMonthly : plan.priceMonthly.toString());
 }
 
-function chooseSaaSCheckoutProvider() {
-  if (env.TOYYIBPAY_CATEGORY_CODE && env.TOYYIBPAY_SECRET_KEY) {
-    return PaymentProvider.TOYYIBPAY;
-  }
+export function listAvailableSaaSCheckoutProviders() {
+  const providers: Array<{ provider: PaymentProvider; label: string }> = [];
 
   if (env.CHIP_BRAND_ID && env.CHIP_API_TOKEN) {
-    return PaymentProvider.CHIP;
+    providers.push({ provider: PaymentProvider.CHIP, label: saasGatewayLabels[PaymentProvider.CHIP] });
   }
 
-  throw new Error("No SaaS payment gateway is configured in env.");
+  if (env.TOYYIBPAY_CATEGORY_CODE && env.TOYYIBPAY_SECRET_KEY) {
+    providers.push({ provider: PaymentProvider.TOYYIBPAY, label: saasGatewayLabels[PaymentProvider.TOYYIBPAY] });
+  }
+
+  return providers;
 }
 
-async function parseGatewayResponse(response: Response) {
-  const text = await response.text();
+function chooseSaaSCheckoutProvider(preferredProvider?: PaymentProvider) {
+  const availableProviders = listAvailableSaaSCheckoutProviders().map((entry) => entry.provider);
 
-  try {
-    return text ? JSON.parse(text) : null;
-  } catch {
-    const snippet = text.slice(0, 160).trim();
-    throw new Error(snippet ? `Payment gateway returned an invalid response: ${snippet}` : "Payment gateway returned an invalid empty response.");
+  if (!availableProviders.length) {
+    throw new Error("No SaaS payment gateway is configured in env.");
   }
+
+  if (preferredProvider) {
+    if (availableProviders.includes(preferredProvider)) {
+      return preferredProvider;
+    }
+
+    throw new Error(`${saasGatewayLabels[preferredProvider]} is not available right now.`);
+  }
+
+  return availableProviders[0];
 }
 
 async function createSaaSPaymentLink(args: {
@@ -69,11 +85,11 @@ async function createSaaSPaymentLink(args: {
       },
       body: formData.toString(),
     });
-    const raw = await parseGatewayResponse(response);
+    const raw = await parseGatewayJsonResponse(response, "Payment gateway returned an invalid response");
     const billCode = raw?.[0]?.BillCode;
 
     if (!response.ok || !billCode) {
-      throw new Error(typeof raw?.[0]?.msg === "string" ? raw[0].msg : "Failed to create ToyyibPay SaaS checkout");
+      throw new Error(readGatewayErrorMessage(raw, "Failed to create ToyyibPay SaaS checkout"));
     }
 
     return {
@@ -109,10 +125,10 @@ async function createSaaSPaymentLink(args: {
         reference: args.checkoutId,
       }),
     });
-    const raw = await parseGatewayResponse(response);
+    const raw = await parseGatewayJsonResponse(response, "Payment gateway returned an invalid response");
 
     if (!response.ok || !raw?.id || !raw?.checkout_url) {
-      throw new Error(raw?.message || "Failed to create CHIP SaaS checkout");
+      throw new Error(readGatewayErrorMessage(raw, "Failed to create CHIP SaaS checkout"));
     }
 
     return {
@@ -236,6 +252,7 @@ export async function createRegistrationCheckout(input: {
   email: string;
   password: string;
   planId: string;
+  provider?: PaymentProvider;
 }) {
   const existing = await db.user.findUnique({
     where: { email: input.email },
@@ -253,7 +270,7 @@ export async function createRegistrationCheckout(input: {
     },
   });
 
-  const provider = chooseSaaSCheckoutProvider();
+  const provider = chooseSaaSCheckoutProvider(input.provider);
   const amount = getPlanPrice(plan);
   const passwordHash = await hashPassword(input.password);
 

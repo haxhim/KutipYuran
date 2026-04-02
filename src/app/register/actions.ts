@@ -1,6 +1,8 @@
 "use server";
 
+import { PaymentProvider } from "@prisma/client";
 import { redirect } from "next/navigation";
+import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { getCurrentUser } from "@/lib/auth";
 import { getSignedInHome } from "@/lib/auth-redirects";
 import { createRegistrationCheckout } from "@/modules/saas/saas.service";
@@ -19,10 +21,15 @@ export async function registerAction(formData: FormData) {
       email: String(formData.get("email") || ""),
       password: String(formData.get("password") || ""),
       planId: String(formData.get("planId") || ""),
+      provider: String(formData.get("provider") || "") as PaymentProvider,
     });
 
     redirect((checkout.checkoutUrl || `/pay/return?kind=saas-signup&checkout=${checkout.id}&status=pending`) as never);
   } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
+
     const message = error instanceof Error ? error.message : "Registration failed";
     redirect(`/register?error=${encodeURIComponent(message)}` as never);
   }

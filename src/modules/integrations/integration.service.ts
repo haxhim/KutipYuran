@@ -3,6 +3,7 @@ import { decrypt, encrypt } from "@/lib/crypto";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 import { createAuditLog } from "@/modules/audit/audit.service";
+import { parseGatewayJsonResponse, readGatewayErrorMessage } from "@/modules/payments/gateway-http";
 import { gatewayToggleSchema, providerConfigSchema } from "@/modules/settings/settings.schemas";
 
 export type ProviderConfigScope = "ORGANIZATION" | "GLOBAL";
@@ -87,28 +88,41 @@ export async function testEnvGatewayConnection(provider: PaymentProvider) {
     };
   }
 
-  const targetUrl =
-    provider === PaymentProvider.CHIP
-      ? `${env.CHIP_API_BASE_URL}/purchases/not-a-real-reference`
-      : `${env.TOYYIBPAY_API_BASE_URL}/index.php/api/getBankFPX`;
-
   try {
-    const response = await fetch(targetUrl, {
-      method: "GET",
-      headers:
-        provider === PaymentProvider.CHIP
-          ? {
-              Authorization: `Bearer ${env.CHIP_API_TOKEN}`,
-            }
-          : undefined,
+    if (provider === PaymentProvider.CHIP) {
+      const response = await fetch(`${env.CHIP_API_BASE_URL}/public_key/`, {
+        headers: {
+          Authorization: `Bearer ${env.CHIP_API_TOKEN}`,
+        },
+      });
+      const raw = await parseGatewayJsonResponse(response, "CHIP returned an invalid response");
+
+      return {
+        ok: response.ok && typeof raw === "string" && raw.includes("BEGIN PUBLIC KEY"),
+        message: response.ok
+          ? "CHIP credentials are valid and the public key endpoint responded successfully."
+          : readGatewayErrorMessage(raw, `CHIP endpoint responded with status ${response.status}.`),
+      };
+    }
+
+    const response = await fetch(`${env.TOYYIBPAY_API_BASE_URL}/index.php/api/getCategoryDetails`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        userSecretKey: env.TOYYIBPAY_SECRET_KEY,
+        categoryCode: env.TOYYIBPAY_CATEGORY_CODE,
+      }).toString(),
     });
+    const raw = await parseGatewayJsonResponse(response, "ToyyibPay returned an invalid response");
 
     return {
-      ok: response.status < 500,
+      ok: response.ok && Array.isArray(raw) && raw.length > 0 && typeof raw[0]?.categoryName === "string",
       message:
-        response.status < 500
-          ? `Connection to ${provider} endpoint succeeded with status ${response.status}.`
-          : `${provider} endpoint responded with status ${response.status}.`,
+        response.ok && Array.isArray(raw) && raw.length > 0 && typeof raw[0]?.categoryName === "string"
+          ? "ToyyibPay credentials are valid and the category lookup succeeded."
+          : readGatewayErrorMessage(raw, `ToyyibPay endpoint responded with status ${response.status}.`),
     };
   } catch (error) {
     return {

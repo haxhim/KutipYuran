@@ -77,6 +77,28 @@ export async function processGatewayWebhook(args: {
     payload: args.payload,
   })) as WebhookProcessResult;
 
+  if (result.signatureValid === false) {
+    const webhookEvent = await db.webhookEvent.create({
+      data: {
+        provider: args.provider,
+        externalEventId: result.providerReference,
+        eventType: `${String(args.provider).toLowerCase()}.webhook`,
+        requestHeaders: Object.fromEntries(args.headers.entries()),
+        payload: args.payload as object,
+        signatureValid: false,
+        status: WebhookStatus.FAILED,
+        processingError: "Invalid webhook signature",
+      },
+    });
+
+    return {
+      ok: false,
+      duplicate: false,
+      webhookEventId: webhookEvent.id,
+      transactionId: null,
+    };
+  }
+
   const providerReference = result.providerReference;
   const existingEvent = providerReference
     ? await db.webhookEvent.findUnique({
