@@ -1,4 +1,11 @@
 -- Bring SaaS pricing and subscription tables in sync with the Prisma schema.
+DO $$
+BEGIN
+  CREATE TYPE "SaaSBillingInterval" AS ENUM ('MONTHLY', 'YEARLY');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
 ALTER TABLE "SaaSPlan"
 ADD COLUMN IF NOT EXISTS "priceAmount" DECIMAL(12, 2) NOT NULL DEFAULT 0,
 ADD COLUMN IF NOT EXISTS "billingInterval" "SaaSBillingInterval" NOT NULL DEFAULT 'MONTHLY';
