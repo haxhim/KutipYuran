@@ -17,12 +17,6 @@ export const payoutRequestSchema = z.object({
   accountNumber: z.string().min(4),
 });
 
-export const teamInviteSchema = z.object({
-  email: z.string().email(),
-  fullName: z.string().min(2),
-  phoneNumber: z.string().optional().or(z.literal("")),
-});
-
 export const inviteAcceptanceSchema = z.object({
   token: z.string().min(10),
   fullName: z.string().min(2),

@@ -18,7 +18,6 @@ const nav: ReadonlyArray<{ label: string; href: Route; demoVisible?: boolean; pe
   { label: "Payment Records", href: "/app/payments", demoVisible: true, permission: permissions.manageBilling },
   { label: "Reports / Analytics", href: "/app/reports", permission: permissions.viewReports },
   { label: "Integrations", href: "/app/integrations", permission: permissions.manageIntegrations },
-  { label: "Team / Members", href: "/app/team", permission: permissions.manageTeam },
   { label: "Audit Logs", href: "/app/audit-logs", permission: permissions.viewAuditLogs },
   { label: "Profile Settings", href: "/app/profile" },
 ];
