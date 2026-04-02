@@ -1,7 +1,6 @@
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { UserDatabaseConsole } from "@/app/admin/users/user-database-console";
 import { listAdminPricingPlans, listTenantAccountsForAdmin } from "@/modules/saas/saas.service";
-import { formatCurrency } from "@/lib/utils";
 
 export default async function AdminUsersPage() {
   const [rows, plans] = await Promise.all([listTenantAccountsForAdmin(), listAdminPricingPlans()]);
@@ -34,6 +33,12 @@ export default async function AdminUsersPage() {
                     ),
                   )
                 : undefined,
+              currentPlanName: row.subscription?.saasPlan.name || "-",
+              subscriptionStartsAt: row.subscription?.startsAt ? new Date(row.subscription.startsAt).toLocaleDateString() : "-",
+              subscriptionEndsAt: row.subscription?.endsAt ? new Date(row.subscription.endsAt).toLocaleDateString() : "-",
+              totalPaid: row.totalPaid,
+              totalMessagesSent: row.totalMessagesSent,
+              statusLabel: row.organization.suspendedAt ? "SUSPENDED" : "ACTIVE",
             }))}
             plans={plans.map((plan) => ({
               id: plan.id,
@@ -41,38 +46,6 @@ export default async function AdminUsersPage() {
               billingInterval: plan.billingInterval,
             }))}
           />
-        </div>
-        <div className="mt-4 overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr className="border-b text-left">
-                <th className="py-3">Name</th>
-                <th>Email</th>
-                <th>Plan Pick</th>
-                <th>Duration</th>
-                <th>Total Paid</th>
-                <th>Total Message Send</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr className="border-b" key={row.organization.id}>
-                  <td className="py-3">{row.organization.name}</td>
-                  <td>{row.owner?.email || "-"}</td>
-                  <td>{row.subscription?.saasPlan.name || "-"}</td>
-                  <td>
-                    {row.subscription?.startsAt ? new Date(row.subscription.startsAt).toLocaleDateString() : "-"}
-                    {" -> "}
-                    {row.subscription?.endsAt ? new Date(row.subscription.endsAt).toLocaleDateString() : "-"}
-                  </td>
-                  <td>{formatCurrency(row.totalPaid)}</td>
-                  <td>{row.totalMessagesSent}</td>
-                  <td>{row.organization.suspendedAt ? "SUSPENDED" : "ACTIVE"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       </Card>
     </div>
