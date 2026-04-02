@@ -36,7 +36,7 @@ export class ToyyibPayPaymentProvider implements PaymentProviderAdapter {
       billPriceSetting: "1",
       billPayorInfo: "1",
       billAmount: String(Number(billingRecord.totalAmount) * 100),
-      billReturnUrl: `${env.APP_URL}/pay/return?status=success&billing=${billingRecord.id}`,
+      billReturnUrl: `${env.APP_URL}/pay/return?billing=${billingRecord.id}`,
       billCallbackUrl: `${env.APP_URL}/api/webhooks/toyyibpay`,
       billExternalReferenceNo: transaction.id,
       billTo: organization.contactPerson,

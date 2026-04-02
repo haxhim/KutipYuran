@@ -57,7 +57,7 @@ export class ChipPaymentProvider implements PaymentProviderAdapter {
         products: [
           {
             name: `KutipYuran ${organization.name} ${billingRecord.referenceNo}`,
-            price: Number(billingRecord.totalAmount),
+            price: Math.round(Number(billingRecord.totalAmount) * 100),
           },
         ],
       },

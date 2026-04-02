@@ -1,6 +1,7 @@
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { UserDatabaseConsole } from "@/app/admin/users/user-database-console";
 import { listAdminPricingPlans, listTenantAccountsForAdmin } from "@/modules/saas/saas.service";
+import { formatCurrency } from "@/lib/utils";
 
 export default async function AdminUsersPage() {
   const [rows, plans] = await Promise.all([listTenantAccountsForAdmin(), listAdminPricingPlans()]);
@@ -17,9 +18,22 @@ export default async function AdminUsersPage() {
         <CardDescription className="mt-2">Name, email, current plan, subscription duration, total message volume, and admin controls.</CardDescription>
         <div className="mt-4">
           <UserDatabaseConsole
-            organizations={rows.map((row) => ({
+            rows={rows.map((row) => ({
               organizationId: row.organization.id,
+              organizationName: row.organization.name,
+              contactPerson: row.organization.contactPerson,
+              ownerFullName: row.owner?.fullName || "",
+              ownerEmail: row.owner?.email || "",
               suspended: Boolean(row.organization.suspendedAt),
+              currentPlanId: row.subscription?.saasPlanId || "",
+              currentDurationDays: row.subscription?.startsAt && row.subscription?.endsAt
+                ? Math.max(
+                    1,
+                    Math.round(
+                      (new Date(row.subscription.endsAt).getTime() - new Date(row.subscription.startsAt).getTime()) / (1000 * 60 * 60 * 24),
+                    ),
+                  )
+                : undefined,
             }))}
             plans={plans.map((plan) => ({
               id: plan.id,
@@ -36,6 +50,7 @@ export default async function AdminUsersPage() {
                 <th>Email</th>
                 <th>Plan Pick</th>
                 <th>Duration</th>
+                <th>Total Paid</th>
                 <th>Total Message Send</th>
                 <th>Status</th>
               </tr>
@@ -51,6 +66,7 @@ export default async function AdminUsersPage() {
                     {" -> "}
                     {row.subscription?.endsAt ? new Date(row.subscription.endsAt).toLocaleDateString() : "-"}
                   </td>
+                  <td>{formatCurrency(row.totalPaid)}</td>
                   <td>{row.totalMessagesSent}</td>
                   <td>{row.organization.suspendedAt ? "SUSPENDED" : "ACTIVE"}</td>
                 </tr>

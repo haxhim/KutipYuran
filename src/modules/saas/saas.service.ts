@@ -70,7 +70,7 @@ async function createSaaSPaymentLink(args: {
       billPriceSetting: "1",
       billPayorInfo: "1",
       billAmount: String(Math.round(args.amount * 100)),
-      billReturnUrl: `${env.APP_URL}/pay/return?kind=saas-signup&checkout=${args.checkoutId}&status=success`,
+      billReturnUrl: `${env.APP_URL}/pay/return?kind=saas-signup`,
       billCallbackUrl: `${env.APP_URL}/api/webhooks/toyyibpay`,
       billExternalReferenceNo: args.checkoutId,
       billTo: args.fullName,
@@ -114,7 +114,7 @@ async function createSaaSPaymentLink(args: {
           products: [
             {
               name: `KutipYuran ${args.planName}`,
-              price: args.amount,
+              price: Math.round(args.amount * 100),
             },
           ],
         },
@@ -441,6 +441,68 @@ export async function getCheckoutStatus(checkoutId: string) {
   });
 }
 
+export async function reconcileRegistrationCheckout(checkoutId: string) {
+  const checkout = await db.saaSSubscriptionCheckout.findUnique({
+    where: { id: checkoutId },
+    include: {
+      saasPlan: true,
+    },
+  });
+
+  if (!checkout || !checkout.providerReference) {
+    return checkout;
+  }
+
+  if (checkout.status === SaaSCheckoutStatus.PAID) {
+    return checkout;
+  }
+
+  if (checkout.provider === PaymentProvider.CHIP) {
+    const response = await fetch(`${env.CHIP_API_BASE_URL}/purchases/${checkout.providerReference}`, {
+      headers: {
+        Authorization: `Bearer ${env.CHIP_API_TOKEN}`,
+      },
+    });
+    const raw = await parseGatewayJsonResponse(response, "Payment gateway returned an invalid response");
+
+    if (response.ok && raw?.paid) {
+      await completeRegistrationCheckout({
+        provider: checkout.provider,
+        providerReference: checkout.providerReference,
+      });
+    }
+  }
+
+  if (checkout.provider === PaymentProvider.TOYYIBPAY) {
+    const response = await fetch(`${env.TOYYIBPAY_API_BASE_URL}/index.php/api/getBillTransactions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        billCode: checkout.providerReference,
+        billpaymentStatus: "1",
+      }).toString(),
+    });
+    const raw = await parseGatewayJsonResponse(response, "Payment gateway returned an invalid response");
+    const paid = Array.isArray(raw) && raw.length > 0 && raw[0]?.billpaymentStatus === "1";
+
+    if (response.ok && paid) {
+      await completeRegistrationCheckout({
+        provider: checkout.provider,
+        providerReference: checkout.providerReference,
+      });
+    }
+  }
+
+  return db.saaSSubscriptionCheckout.findUnique({
+    where: { id: checkoutId },
+    include: {
+      saasPlan: true,
+    },
+  });
+}
+
 export async function getActiveOrganizationSubscription(organizationId: string) {
   const subscription = await db.organizationSubscription.findFirst({
     where: {
@@ -568,6 +630,11 @@ export async function listTenantAccountsForAdmin() {
           },
         },
       },
+      billingRecords: {
+        select: {
+          amountPaid: true,
+        },
+      },
     },
   });
 
@@ -576,6 +643,7 @@ export async function listTenantAccountsForAdmin() {
     owner: organization.members[0]?.user || null,
     subscription: organization.subscriptions[0] || null,
     totalMessagesSent: organization._count.messageLogs,
+    totalPaid: organization.billingRecords.reduce((sum, billingRecord) => sum + Number(billingRecord.amountPaid), 0),
   }));
 }
 
@@ -585,6 +653,10 @@ export async function adminUpdateTenantAccount(args: {
   planId?: string;
   durationDays?: number;
   suspended?: boolean;
+  organizationName?: string;
+  contactPerson?: string;
+  ownerFullName?: string;
+  ownerEmail?: string;
 }) {
   const organization = await db.organization.findUniqueOrThrow({
     where: { id: args.organizationId },
@@ -598,6 +670,29 @@ export async function adminUpdateTenantAccount(args: {
       },
     },
   });
+
+  const ownerMember = organization.members[0] || null;
+
+  if (args.organizationName || args.contactPerson) {
+    await db.organization.update({
+      where: { id: organization.id },
+      data: {
+        name: args.organizationName || organization.name,
+        contactPerson: args.contactPerson || organization.contactPerson,
+        senderDisplayName: args.contactPerson || organization.senderDisplayName,
+      },
+    });
+  }
+
+  if (ownerMember && (args.ownerFullName || args.ownerEmail)) {
+    await db.user.update({
+      where: { id: ownerMember.userId },
+      data: {
+        fullName: args.ownerFullName || ownerMember.user.fullName,
+        email: args.ownerEmail || ownerMember.user.email,
+      },
+    });
+  }
 
   if (typeof args.suspended === "boolean") {
     await db.organization.update({
@@ -665,6 +760,10 @@ export async function adminUpdateTenantAccount(args: {
       planId: args.planId,
       durationDays: args.durationDays,
       suspended: args.suspended,
+      organizationName: args.organizationName,
+      contactPerson: args.contactPerson,
+      ownerFullName: args.ownerFullName,
+      ownerEmail: args.ownerEmail,
     },
   });
 }

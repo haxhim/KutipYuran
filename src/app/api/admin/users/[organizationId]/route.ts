@@ -18,6 +18,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       planId: body.planId ? String(body.planId) : undefined,
       durationDays: body.durationDays ? Number(body.durationDays) : undefined,
       suspended: typeof body.suspended === "boolean" ? body.suspended : undefined,
+      organizationName: body.organizationName ? String(body.organizationName) : undefined,
+      contactPerson: body.contactPerson ? String(body.contactPerson) : undefined,
+      ownerFullName: body.ownerFullName ? String(body.ownerFullName) : undefined,
+      ownerEmail: body.ownerEmail ? String(body.ownerEmail) : undefined,
     });
     return NextResponse.json({ ok: true });
   } catch (error) {
