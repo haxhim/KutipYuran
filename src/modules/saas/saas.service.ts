@@ -432,6 +432,39 @@ export async function completeRegistrationCheckout(args: {
   return checkout;
 }
 
+export async function completeRegistrationCheckoutById(checkoutId: string) {
+  const checkout = await db.saaSSubscriptionCheckout.findUnique({
+    where: { id: checkoutId },
+    include: {
+      saasPlan: true,
+    },
+  });
+
+  if (!checkout || !checkout.providerReference) {
+    return checkout;
+  }
+
+  if (checkout.status === SaaSCheckoutStatus.PAID) {
+    return checkout;
+  }
+
+  try {
+    await completeRegistrationCheckout({
+      provider: checkout.provider,
+      providerReference: checkout.providerReference,
+    });
+  } catch {
+    return checkout;
+  }
+
+  return db.saaSSubscriptionCheckout.findUnique({
+    where: { id: checkoutId },
+    include: {
+      saasPlan: true,
+    },
+  });
+}
+
 export async function getCheckoutStatus(checkoutId: string) {
   return db.saaSSubscriptionCheckout.findUnique({
     where: { id: checkoutId },

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getCheckoutStatus, reconcileRegistrationCheckout } from "@/modules/saas/saas.service";
+import { completeRegistrationCheckoutById, getCheckoutStatus, reconcileRegistrationCheckout } from "@/modules/saas/saas.service";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +29,7 @@ export default async function PaymentReturnPage({ searchParams }: { searchParams
   const checkoutId = params.checkout || params.order_id;
   const checkout =
     params.kind === "saas-signup" && checkoutId && status === "success"
-      ? await reconcileRegistrationCheckout(checkoutId)
+      ? await completeRegistrationCheckoutById(checkoutId) || await reconcileRegistrationCheckout(checkoutId)
       : checkoutId
         ? await getCheckoutStatus(checkoutId)
         : null;
