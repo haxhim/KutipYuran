@@ -9,10 +9,16 @@ import { listPublicPricingPlans } from "@/modules/saas/saas.service";
 
 export const dynamic = "force-dynamic";
 
-export default async function RegisterPage() {
+export default async function RegisterPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ error?: string }>;
+}) {
   const user = await getCurrentUser();
   redirectIfSignedIn(user);
   const plans = await listPublicPricingPlans();
+  const params = searchParams ? await searchParams : undefined;
+  const error = params?.error;
 
   return (
     <div>
@@ -21,6 +27,7 @@ export default async function RegisterPage() {
         <Card>
           <CardTitle>Create Organization and Pay First</CardTitle>
           <form action={registerAction} className="mt-6 grid gap-4">
+            {error ? <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
             <Input name="organizationName" placeholder="Organization name" required />
             <Input name="contactPerson" placeholder="Contact person" required />
             <Input name="fullName" placeholder="Your full name" required />

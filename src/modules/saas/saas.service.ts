@@ -26,6 +26,17 @@ function chooseSaaSCheckoutProvider() {
   throw new Error("No SaaS payment gateway is configured in env.");
 }
 
+async function parseGatewayResponse(response: Response) {
+  const text = await response.text();
+
+  try {
+    return text ? JSON.parse(text) : null;
+  } catch {
+    const snippet = text.slice(0, 160).trim();
+    throw new Error(snippet ? `Payment gateway returned an invalid response: ${snippet}` : "Payment gateway returned an invalid empty response.");
+  }
+}
+
 async function createSaaSPaymentLink(args: {
   checkoutId: string;
   provider: PaymentProvider;
@@ -58,11 +69,11 @@ async function createSaaSPaymentLink(args: {
       },
       body: formData.toString(),
     });
-    const raw = await response.json();
+    const raw = await parseGatewayResponse(response);
     const billCode = raw?.[0]?.BillCode;
 
     if (!response.ok || !billCode) {
-      throw new Error("Failed to create ToyyibPay SaaS checkout");
+      throw new Error(typeof raw?.[0]?.msg === "string" ? raw[0].msg : "Failed to create ToyyibPay SaaS checkout");
     }
 
     return {
@@ -98,7 +109,7 @@ async function createSaaSPaymentLink(args: {
         reference: args.checkoutId,
       }),
     });
-    const raw = await response.json();
+    const raw = await parseGatewayResponse(response);
 
     if (!response.ok || !raw?.id || !raw?.checkout_url) {
       throw new Error(raw?.message || "Failed to create CHIP SaaS checkout");

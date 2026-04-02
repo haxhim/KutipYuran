@@ -11,14 +11,19 @@ export async function registerAction(formData: FormData) {
     redirect(getSignedInHome(existingUser));
   }
 
-  const checkout = await createRegistrationCheckout({
-    organizationName: String(formData.get("organizationName") || ""),
-    contactPerson: String(formData.get("contactPerson") || ""),
-    fullName: String(formData.get("fullName") || ""),
-    email: String(formData.get("email") || ""),
-    password: String(formData.get("password") || ""),
-    planId: String(formData.get("planId") || ""),
-  });
+  try {
+    const checkout = await createRegistrationCheckout({
+      organizationName: String(formData.get("organizationName") || ""),
+      contactPerson: String(formData.get("contactPerson") || ""),
+      fullName: String(formData.get("fullName") || ""),
+      email: String(formData.get("email") || ""),
+      password: String(formData.get("password") || ""),
+      planId: String(formData.get("planId") || ""),
+    });
 
-  redirect((checkout.checkoutUrl || `/pay/return?kind=saas-signup&checkout=${checkout.id}&status=pending`) as never);
+    redirect((checkout.checkoutUrl || `/pay/return?kind=saas-signup&checkout=${checkout.id}&status=pending`) as never);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Registration failed";
+    redirect(`/register?error=${encodeURIComponent(message)}` as never);
+  }
 }
