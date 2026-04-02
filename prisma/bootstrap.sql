@@ -1,3 +1,5 @@
+SELECT pg_advisory_lock(918273645);
+
 DO $$
 BEGIN
   CREATE TYPE "SaaSBillingInterval" AS ENUM ('MONTHLY', 'YEARLY');
@@ -21,3 +23,5 @@ SET "billingInterval" = COALESCE(sp."billingInterval", 'MONTHLY')
 FROM "SaaSPlan" sp
 WHERE sp."id" = os."saasPlanId"
   AND os."billingInterval" = 'MONTHLY';
+
+SELECT pg_advisory_unlock(918273645);
