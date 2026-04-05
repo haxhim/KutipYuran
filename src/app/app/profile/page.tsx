@@ -1,4 +1,5 @@
-export default function ProfilePage() {
-  return <div><h1 className="text-3xl font-bold">Profile Settings</h1></div>;
-}
+import { redirect } from "next/navigation";
 
+export default function ProfilePage() {
+  redirect("/app/settings");
+}

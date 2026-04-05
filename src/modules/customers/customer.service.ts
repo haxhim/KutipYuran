@@ -20,17 +20,40 @@ export async function createCustomer(organizationId: string, input: {
   email?: string;
   phoneNumber: string;
   notes?: string;
+  planAssignments?: Array<{
+    feePlanId: string;
+    quantity: number;
+  }>;
 }) {
-  return db.customer.create({
-    data: {
-      organizationId,
-      fullName: input.fullName,
-      firstName: input.firstName,
-      email: input.email || null,
-      phoneNumber: input.phoneNumber,
-      normalizedWhatsapp: normalizeMalaysiaPhone(input.phoneNumber),
-      notes: input.notes,
-    },
+  return db.$transaction(async (tx) => {
+    const customer = await tx.customer.create({
+      data: {
+        organizationId,
+        fullName: input.fullName,
+        firstName: input.firstName,
+        email: input.email || null,
+        phoneNumber: input.phoneNumber,
+        normalizedWhatsapp: normalizeMalaysiaPhone(input.phoneNumber),
+        notes: input.notes,
+      },
+    });
+
+    for (const assignment of input.planAssignments || []) {
+      if (!assignment.feePlanId || assignment.quantity <= 0) {
+        continue;
+      }
+
+      await tx.customerPlanAssignment.create({
+        data: {
+          organizationId,
+          customerId: customer.id,
+          feePlanId: assignment.feePlanId,
+          quantity: assignment.quantity,
+          active: true,
+        },
+      });
+    }
+
+    return customer;
   });
 }
-

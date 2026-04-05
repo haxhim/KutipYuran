@@ -9,7 +9,7 @@ export default async function ImportsPage() {
     db.feePlan.findMany({
       where: { organizationId: tenant.organizationId, deletedAt: null, active: true },
       orderBy: { name: "asc" },
-      select: { name: true },
+      select: { id: true, name: true },
     }),
     listImportJobs(tenant.organizationId),
   ]);
@@ -21,7 +21,7 @@ export default async function ImportsPage() {
         Download template
       </a>
       <ImportsConsole
-        feePlans={feePlans.map((plan) => plan.name)}
+        feePlans={feePlans.map((plan) => ({ id: plan.id, name: plan.name }))}
         importJobs={importJobs.map((job) => ({
           id: job.id,
           originalFileName: job.originalFileName,

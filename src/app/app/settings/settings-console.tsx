@@ -9,12 +9,12 @@ export function SettingsConsole({
   initialValues,
 }: {
   initialValues: {
-    name: string;
+    companyName: string;
+    fullName: string;
+    email: string;
     contactPerson: string;
     supportPhone: string;
     supportWhatsapp: string;
-    senderDisplayName: string;
-    messageSignature: string;
   };
 }) {
   const router = useRouter();
@@ -41,12 +41,12 @@ export function SettingsConsole({
   return (
     <div className="space-y-4">
       <div className="grid gap-3 md:grid-cols-2">
-        <Input onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="Organization name" value={form.name} />
+        <Input onChange={(event) => setForm((current) => ({ ...current, companyName: event.target.value }))} placeholder="Company name" value={form.companyName} />
+        <Input onChange={(event) => setForm((current) => ({ ...current, fullName: event.target.value }))} placeholder="Your full name" value={form.fullName} />
+        <Input disabled placeholder="Email" value={form.email} />
         <Input onChange={(event) => setForm((current) => ({ ...current, contactPerson: event.target.value }))} placeholder="Contact person" value={form.contactPerson} />
         <Input onChange={(event) => setForm((current) => ({ ...current, supportPhone: event.target.value }))} placeholder="Support phone" value={form.supportPhone} />
         <Input onChange={(event) => setForm((current) => ({ ...current, supportWhatsapp: event.target.value }))} placeholder="Support WhatsApp" value={form.supportWhatsapp} />
-        <Input onChange={(event) => setForm((current) => ({ ...current, senderDisplayName: event.target.value }))} placeholder="Sender display name" value={form.senderDisplayName} />
-        <Input onChange={(event) => setForm((current) => ({ ...current, messageSignature: event.target.value }))} placeholder="Default message signature" value={form.messageSignature} />
       </div>
       <Button disabled={isPending} onClick={saveSettings} type="button">
         Save Settings

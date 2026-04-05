@@ -1,5 +1,4 @@
-import { Card, CardTitle } from "@/components/ui/card";
-import { formatCurrency } from "@/lib/utils";
+import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { PlansConsole } from "@/app/app/plans/plans-console";
 import { permissions } from "@/modules/authz/permissions";
 import { listFeePlans } from "@/modules/fee-plans/fee-plan.service";
@@ -11,9 +10,13 @@ export default async function PlansPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Plans & Pricing</h1>
+      <div>
+        <h1 className="text-3xl font-bold">Plans & Pricing</h1>
+        <p className="text-muted-foreground">Keep customer plans simple and easy to manage.</p>
+      </div>
       <Card>
         <CardTitle>Fee Plans</CardTitle>
+        <CardDescription className="mt-2">Create a plan with just a name, short description, and amount.</CardDescription>
         <div className="mt-4">
           <PlansConsole
             plans={plans.map((plan) => ({
@@ -26,21 +29,9 @@ export default async function PlansPage() {
               dueIntervalDays: plan.dueIntervalDays,
               notes: plan.notes,
               active: plan.active,
+              currency: plan.currency,
             }))}
           />
-        </div>
-        <div className="mt-4 space-y-3">
-          {plans.map((plan) => (
-            <div key={plan.id} className="rounded-xl bg-muted p-4 text-sm">
-              <p className="font-medium">{plan.name}</p>
-              <p>Description: {plan.description || "-"}</p>
-              <p>Amount: {formatCurrency(plan.amount.toString(), plan.currency)}</p>
-              <p>Type: {plan.billingType}</p>
-              <p>Active: {plan.active ? "Yes" : "No"}</p>
-              <p>Assignments: {plan.assignments.length}</p>
-              <p>Notes: {plan.notes || "-"}</p>
-            </div>
-          ))}
         </div>
       </Card>
     </div>

@@ -5,6 +5,7 @@ import type { ChangeEvent } from "react";
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 
 type ImportPreview = {
   previewRows: Array<{
@@ -37,11 +38,18 @@ export function ImportsConsole({
   feePlans,
   importJobs,
 }: {
-  feePlans: string[];
+  feePlans: Array<{ id: string; name: string }>;
   importJobs: ImportJobItem[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [manualForm, setManualForm] = useState({
+    fullName: "",
+    phoneNumber: "",
+  });
+  const [manualAssignments, setManualAssignments] = useState<Array<{ feePlanId: string; quantity: string }>>([
+    { feePlanId: "", quantity: "1" },
+  ]);
   const [csvContent, setCsvContent] = useState("");
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [previewJobId, setPreviewJobId] = useState<string | null>(null);
@@ -58,6 +66,38 @@ export function ImportsConsole({
     setPreview(null);
     setPreviewJobId(null);
     setStatusMessage(`Loaded ${file.name}. Preview it before importing.`);
+  }
+
+  async function createManualCustomer() {
+    setStatusMessage("");
+    const response = await fetch("/api/customers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fullName: manualForm.fullName,
+        phoneNumber: manualForm.phoneNumber,
+        planAssignments: manualAssignments
+          .filter((assignment) => assignment.feePlanId && Number(assignment.quantity) > 0)
+          .map((assignment) => ({
+            feePlanId: assignment.feePlanId,
+            quantity: Number(assignment.quantity),
+          })),
+      }),
+    });
+    const payload = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      setStatusMessage(payload?.error || "Failed to add customer.");
+      return;
+    }
+
+    setManualForm({
+      fullName: "",
+      phoneNumber: "",
+    });
+    setManualAssignments([{ feePlanId: "", quantity: "1" }]);
+    setStatusMessage("Customer added successfully.");
+    startTransition(() => router.refresh());
   }
 
   async function previewImport() {
@@ -106,6 +146,82 @@ export function ImportsConsole({
     <div className="space-y-6">
       <Card className="space-y-4">
         <div>
+          <CardTitle>Manual Add</CardTitle>
+          <CardDescription className="mt-2">Add a customer one by one with the plans and quantities they need.</CardDescription>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2">
+          <Input
+            onChange={(event) => setManualForm((current) => ({ ...current, fullName: event.target.value }))}
+            placeholder="Name"
+            value={manualForm.fullName}
+          />
+          <Input
+            onChange={(event) => setManualForm((current) => ({ ...current, phoneNumber: event.target.value }))}
+            placeholder="WhatsApp Number"
+            value={manualForm.phoneNumber}
+          />
+        </div>
+
+        <div className="space-y-3">
+          {manualAssignments.map((assignment, index) => (
+            <div className="grid gap-3 md:grid-cols-[1fr_140px_auto]" key={`${index}-${assignment.feePlanId}`}>
+              <select
+                className="h-10 rounded-xl border bg-background px-3 text-sm"
+                onChange={(event) =>
+                  setManualAssignments((current) =>
+                    current.map((item, itemIndex) => (itemIndex === index ? { ...item, feePlanId: event.target.value } : item)),
+                  )
+                }
+                value={assignment.feePlanId}
+              >
+                <option value="">Select plan</option>
+                {feePlans.map((plan) => (
+                  <option key={plan.id} value={plan.id}>
+                    {plan.name}
+                  </option>
+                ))}
+              </select>
+              <Input
+                min="1"
+                onChange={(event) =>
+                  setManualAssignments((current) =>
+                    current.map((item, itemIndex) => (itemIndex === index ? { ...item, quantity: event.target.value } : item)),
+                  )
+                }
+                placeholder="Quantity"
+                type="number"
+                value={assignment.quantity}
+              />
+              <Button
+                onClick={() =>
+                  setManualAssignments((current) => (current.length === 1 ? current : current.filter((_, itemIndex) => itemIndex !== index)))
+                }
+                type="button"
+                variant="outline"
+              >
+                Remove
+              </Button>
+            </div>
+          ))}
+          <Button
+            onClick={() => setManualAssignments((current) => [...current, { feePlanId: "", quantity: "1" }])}
+            type="button"
+            variant="outline"
+          >
+            Add Plan
+          </Button>
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          <Button disabled={isPending || !manualForm.fullName.trim() || !manualForm.phoneNumber.trim()} onClick={createManualCustomer} type="button">
+            Add Customer
+          </Button>
+        </div>
+      </Card>
+
+      <Card className="space-y-4">
+        <div>
           <CardTitle>CSV Import</CardTitle>
           <CardDescription className="mt-2">
             Preview a customer import, then queue the import job for background processing with history and row-level failure tracking.
@@ -124,7 +240,7 @@ export function ImportsConsole({
 
         <div className="rounded-xl bg-muted p-4 text-sm">
           <p className="font-semibold">Supported fee plans in this workspace</p>
-          <p className="mt-2 text-muted-foreground">{feePlans.length ? feePlans.join(", ") : "No fee plans found yet."}</p>
+          <p className="mt-2 text-muted-foreground">{feePlans.length ? feePlans.map((plan) => plan.name).join(", ") : "No fee plans found yet."}</p>
         </div>
 
         <textarea

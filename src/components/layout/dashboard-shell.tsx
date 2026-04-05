@@ -7,7 +7,7 @@ import { permissions, type PermissionKey } from "@/modules/authz/permissions";
 
 const nav: ReadonlyArray<{ label: string; href: Route; demoVisible?: boolean; permission?: PermissionKey }> = [
   { label: "Dashboard", href: "/app", demoVisible: true },
-  { label: "Organization Settings", href: "/app/settings", permission: permissions.manageOrganizationSettings },
+  { label: "Settings", href: "/app/settings", permission: permissions.manageOrganizationSettings },
   { label: "Subscription & Billing", href: "/app/subscription", permission: permissions.managePricingAndLimits },
   { label: "WhatsApp Connection", href: "/app/whatsapp", demoVisible: true, permission: permissions.manageWhatsapp },
   { label: "Plans & Pricing", href: "/app/plans", permission: permissions.manageBilling },
@@ -19,7 +19,6 @@ const nav: ReadonlyArray<{ label: string; href: Route; demoVisible?: boolean; pe
   { label: "Reports / Analytics", href: "/app/reports", permission: permissions.viewReports },
   { label: "Integrations", href: "/app/integrations", permission: permissions.manageIntegrations },
   { label: "Audit Logs", href: "/app/audit-logs", permission: permissions.viewAuditLogs },
-  { label: "Profile Settings", href: "/app/profile" },
 ];
 
 export async function DashboardShell({ children }: { children: React.ReactNode }) {
